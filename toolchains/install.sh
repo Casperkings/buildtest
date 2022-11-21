@@ -58,6 +58,7 @@ if [ ! -e "/usr/tmp" ]; then
         sudo chmod a+w /usr/tmp
 fi
 
+echo DSP_TOOL_FOLDER
 cd "$DSP_TOOL_FOLDER"
 echo "$PWD"
 tar -C "${DSP_LICSERV_FOLDER}" -zxvf "$DSP_LICSERV_PACKAGE"
@@ -77,16 +78,6 @@ else
 	echo "Use user assigned license file"
 
 fi	
-
-#if [ ! -e "${SDK_PACKAGE}" ]; then
-#       echo "Error: please get SDK package "${SDK_PACKAGE}", and put in folder ${INSTALL_WORK_DIR}"
-#       exit 1
-#fi
-
-#if [ ! -e "${DSP_TOOL_PACKAGE_2021}" ]; then
-#	echo "Error: please get iot sdk tool package ${DSP_TOOL_PACKAGE_2021}, and put in folder ${INSTALL_WORK_DIR}" 
-#	exit 1
-#fi
 
 if [ ! -e "${DSP_CONFIG_2021}" ]; then
 	echo "Error: please get DSP config ${DSP_CONFIG_2021}, and put in folder ${INSTALL_WORK_DIR}" 
@@ -134,7 +125,7 @@ fi
 if [ -d "${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K/" ]; then
     DSP_CONFIG_2021_INSTALLED="yes"
 else
-    echo "tar -C ${XTENSA_PATH} -zxvf ${DSP_CONFIG_2021}" >> ${XTENSA_ROOT}/install_log
+    echo "tar -C ${XTENSA_PATH} -zxvf ${DSP_CONFIG_2021}"
     tar -C "${XTENSA_PATH}" -zxvf "${DSP_CONFIG_2021}"
     if [ "$?" -ne "0" ]; then
             echo  "Error: decompress ${DSP_CONFIG_2021} fail."
@@ -147,8 +138,12 @@ if [ "$DSP_CONFIG_2021_INSTALLED" == "no" ]; then
      echo Install dsp config, may take few seconds, please wait...
      echo "Install dsp config, may take few seconds, please wait... " > ${XTENSA_ROOT}/install_log
      echo "cd ${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
-     echo "cd ${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
      echo "./install --xtensa-tools ${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools --no-default"
+     cd "${DSP_LICSERV_FOLDER}"
+     ls
+     echo "0"
+     cd "${XTENSA_ROOT}"
+     ls
      echo "0"
      cd "${XTENSA_PATH}"
      ls
@@ -159,7 +154,7 @@ if [ "$DSP_CONFIG_2021_INSTALLED" == "no" ]; then
      cd "${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
      ls
      echo "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools"
-     ./install --xtensa-tools "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools" --no-default
+     sudo bash ./install --xtensa-tools "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools" --no-default
      if [ "$?" -ne "0" ]; then
              echo  "Error: install dsp package fail. The config may already installed or have incorrect tool path"
              echo  ""
