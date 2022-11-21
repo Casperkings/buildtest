@@ -147,6 +147,8 @@ if [ "$DSP_CONFIG_2021_INSTALLED" == "no" ]; then
      echo Install dsp config, may take few seconds, please wait...
      echo "Install dsp config, may take few seconds, please wait... " > ${XTENSA_ROOT}/install_log
      echo "cd ${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K" >> ${XTENSA_ROOT}/install_log
+     ls
+     echo "cd ${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
      echo "./install --xtensa-tools ${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools --no-default" >> ${XTENSA_ROOT}/install_log
      cd "${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
      ./install --xtensa-tools "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools" --no-default
