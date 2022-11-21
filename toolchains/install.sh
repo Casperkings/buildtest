@@ -154,7 +154,7 @@ if [ "$DSP_CONFIG_2021_INSTALLED" == "no" ]; then
      cd "${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
      ls
      echo "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools"
-     sudo bash ./install --xtensa-tools "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools" --no-default
+     sudo ./install --xtensa-tools "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools" --no-default
      if [ "$?" -ne "0" ]; then
              echo  "Error: install dsp package fail. The config may already installed or have incorrect tool path"
              echo  ""
