@@ -36,6 +36,6 @@ jobs:
           echo test, and deploy your project.
           echo ${HOME}
           cd ./toolchains
-          ./install.sh
+          sudo ./install.sh
           
           
