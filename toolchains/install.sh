@@ -119,7 +119,7 @@ if [ -d "${XTENSA_PATH}/${XTENSA_VERSION_2021}/" ]; then
 else
    #echo tar -C ${XTENSA_PATH} -zxvf ${DSP_TOOL_PACKAGE_2021} >> ${XTENSA_ROOT}/install_log
    #tar -C "${XTENSA_PATH}" -zxvf "${DSP_TOOL_PACKAGE_2021}"
-   echo cp -r  ${DSP_TOOL_PACKAGE_2021} ${XTENSA_PATH} >> ${XTENSA_ROOT}/install_log
+   echo cp -r  ${DSP_TOOL_PACKAGE_2021} ${XTENSA_PATH}
    #cp -r myfolder /path/to/
    cp -r  ./RI-2021.8-linux ${XTENSA_PATH}
    tar -zxvf ./libgecodeint.tar.gz
@@ -147,12 +147,18 @@ if [ "$DSP_CONFIG_2021_INSTALLED" == "no" ]; then
      echo Install dsp config, may take few seconds, please wait...
      echo "Install dsp config, may take few seconds, please wait... " > ${XTENSA_ROOT}/install_log
      echo "cd ${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
-     ls
      echo "cd ${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
      echo "./install --xtensa-tools ${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools --no-default"
-     cd "${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
-     pwd
+     echo "0"
+     cd "${XTENSA_PATH}"
      ls
+     echo "1"
+     cd "${XTENSA_PATH}/${XTENSA_VERSION_2021}"
+     ls
+     echo "2"
+     cd "${XTENSA_PATH}/${XTENSA_VERSION_2021}/AB1568_i64B_d32B_512K"
+     ls
+     echo "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools"
      ./install --xtensa-tools "${XTENSA_ROOT}/xtensa/${XTENSA_VERSION_2021}/XtensaTools" --no-default
      if [ "$?" -ne "0" ]; then
              echo  "Error: install dsp package fail. The config may already installed or have incorrect tool path"
