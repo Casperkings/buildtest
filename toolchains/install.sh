@@ -122,7 +122,7 @@ else
    echo cp -r  ${DSP_TOOL_PACKAGE_2021} ${XTENSA_PATH} >> ${XTENSA_ROOT}/install_log
    #cp -r myfolder /path/to/
    cp -r  ./RI-2021.8-linux ${XTENSA_PATH}
-   tar -zxvf ./libgecodeint.7z
+   tar -zxvf ./libgecodeint.tar.gz
    cp ./libgecodeint.a ${XTENSA_PATH}/RI-2021.8-linux/XtensaTools/lib
    
    if [ "$?" -ne "0" ]; then
