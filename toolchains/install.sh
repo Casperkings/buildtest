@@ -83,10 +83,10 @@ fi
 #       exit 1
 #fi
 
-if [ ! -e "${DSP_TOOL_PACKAGE_2021}" ]; then
-	echo "Error: please get iot sdk tool package ${DSP_TOOL_PACKAGE_2021}, and put in folder ${INSTALL_WORK_DIR}" 
-	exit 1
-fi
+#if [ ! -e "${DSP_TOOL_PACKAGE_2021}" ]; then
+#	echo "Error: please get iot sdk tool package ${DSP_TOOL_PACKAGE_2021}, and put in folder ${INSTALL_WORK_DIR}" 
+#	exit 1
+#fi
 
 if [ ! -e "${DSP_CONFIG_2021}" ]; then
 	echo "Error: please get DSP config ${DSP_CONFIG_2021}, and put in folder ${INSTALL_WORK_DIR}" 
