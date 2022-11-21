@@ -1,0 +1,60 @@
+# Makefile for trax directory, which builds the trax software library
+
+# Copyright (c) 2012-2013 Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+VPATH = @srcdir@ ../../SWConfig/gnusrc
+prefix = @prefix@
+
+install_libdir = $(prefix)/xtensa-elf/lib
+
+top_builddir = @abs_top_builddir@
+top_srcdir = @top_srcdir@
+
+default: all
+include $(top_builddir)/../Makefile.env
+
+INSTALL = @INSTALL@
+INSTALL_DATA = @INSTALL_DATA@
+
+CC_FOR_TARGET = $(XTTOOLS)/bin/$(XTENSA_CC_FOR_TARGET)
+AR_FOR_TARGET = $(XTTOOLS)/bin/xt-ar
+
+CFLAGS_FOR_TARGET = -O2 -g -Wall -Werror -mlongcalls
+
+
+# Target library.
+TRAX_LIBS = libtrax.a
+
+OBJS = trax.o  trax-proto.o trax-util.o
+
+.PHONY: all clean install
+
+all: $(TRAX_LIBS)
+
+install: $(TRAX_LIBS)
+	mkdir -p $(install_libdir)
+	$(INSTALL_DATA) $(TRAX_LIBS) $(install_libdir)
+
+%.o : %.c
+	$(CC_FOR_TARGET) $(CFLAGS_FOR_TARGET) -c -o $@ $<
+
+$(TRAX_LIBS): $(OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+clean:
+	-rm -f *.o $(TRAX_LIBS)
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) && $(SHELL) ./config.status
+
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && $(SHELL) ./config.status --recheck
+

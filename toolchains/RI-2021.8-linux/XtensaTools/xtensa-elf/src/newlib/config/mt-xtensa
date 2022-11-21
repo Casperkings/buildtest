@@ -1,0 +1,22 @@
+CFLAGS_FOR_TARGET = -O3 -g -fno-unsafe-math-optimizations -ffunction-sections
+CXXFLAGS_FOR_TARGET = -O3 -g -fno-unsafe-math-optimizations -ffunction-sections
+
+CC_FOR_TARGET = ` \
+  if [ -f $$r/$(TARGET_SUBDIR)/newlib/Makefile ] ; then \
+    echo $(XTENSA_CC_FOR_TARGET) -isystem $$r/$(TARGET_SUBDIR)/newlib/targ-include -isystem $$s/newlib/libc/include; \
+  else \
+    echo $(XTENSA_CC_FOR_TARGET); \
+  fi`
+
+CXX_FOR_TARGET = ` \
+  if [ -f $$r/$(TARGET_SUBDIR)/newlib/Makefile ] ; then \
+    echo $(XTENSA_CXX_FOR_TARGET) -isystem $$r/$(TARGET_SUBDIR)/newlib/targ-include -isystem $$s/newlib/libc/include; \
+  else \
+    echo $(XTENSA_CXX_FOR_TARGET); \
+  fi`
+
+AS_FOR_TARGET = xt-as
+LD_FOR_TARGET = xt-ld
+AR_FOR_TARGET = xt-ar
+RANLIB_FOR_TARGET = xt-ranlib
+NM_FOR_TARGET = xt-nm

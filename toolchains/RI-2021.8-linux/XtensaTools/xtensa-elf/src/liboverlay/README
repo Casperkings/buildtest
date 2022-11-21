@@ -1,0 +1,36 @@
+# Copyright (c) 2014 by Cadence Design Systems, Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Cadence Design Systems Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Cadence Design Systems Inc.
+
+List of files:
+
+call_stubs.S        - Currently unused (auto-generated overlay stubs).
+
+overlay.h           - General include file for overlays. Include as
+                      "#include <xtensa/overlay.h".
+
+overlay_override.c  - User overridable functions for overlay mapping
+                      and error handling.
+
+overlay_asm.S       - Overlay manager assembly routines.
+
+overlay_manager.c   - Overlay manager C routines.
+
+overlay_os_hook.c   - OS specific hook functions, need to be customized
+                      for the OS in use. Copy this file and include it
+                      in the OS-specific build.
+
+overlay_os_asm.h    - Assembly macros (for OS use). Should be independent
+                      of OS being used. Just make sure that the entry and
+                      exit conditions are met. Use as -
+                      "#include <xtensa/overlay_os_asm.h".
+
+overlay_os_asm.S    - Context restore code. Should be reasonably OS
+                      independent. Make sure entry and exit conditions
+                      are met.
+
+overlay_os_asm_1.S  - C callable equivalents of OS assembly macros.
+

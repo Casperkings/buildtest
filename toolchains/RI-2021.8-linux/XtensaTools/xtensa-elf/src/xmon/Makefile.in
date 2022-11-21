@@ -1,0 +1,253 @@
+# Makefile for xmon
+
+# Copyright (c) 1998-2013 Tensilica Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+VPATH =  @srcdir@  @srcdir@/examples
+prefix = @prefix@
+bindir = $(prefix)/bin
+target_alias = @target_alias@
+exampledir = $(prefix)/examples
+boardbindir = $(prefix)/$(target_alias)/bin
+targlibdir = $(prefix)/$(target_alias)/arch/lib
+xmonsrcdir = $(prefix)/$(target_alias)/src/xmon
+
+top_builddir = @abs_top_builddir@
+top_srcdir = @top_srcdir@
+
+default: all
+include $(top_builddir)/../../Makefile.env
+
+INSTALL = @INSTALL@
+INSTALL_DATA = @INSTALL_DATA@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+
+ISA_BUILDDIR = $(XTENSA_BUILD_DIR)/ISA/def/Xtensa
+XTENSA_ISA = $(ISA_BUILDDIR)/Xtensa.isa
+ISA_FILES = $(wildcard $(ISA_BUILDDIR)/Xtensa*.isa)
+ISS_SRCDIR = $(XTENSA_SRC_DIR)/Software/iss/isscore
+
+# FIXME: disable build for XEA3
+XCFGDIR = $(shell xt-clang --show-config=config)
+XSTR1   = $(shell cd $(XCFGDIR) && grep -r XEA_VERSION src/config/core.h)
+XEAVER  = $(word 3, $(XSTR1))
+
+# Export variables for building xmon-registers.h
+export XTENSA_ISA
+export ISS_SRCDIR
+
+XCXX = $(XTENSA_CXX_FOR_TARGET)
+XCC  = $(XTENSA_CC_FOR_TARGET)
+
+XLD = xt-ld
+XAR = xt-ar
+XOBJCOPY = xt-objcopy
+ifeq ($(XCC),xt-xcc)
+targlibdirxcc = $(targlibdir)/xcc
+else
+targlibdirxcc = $(targlibdir)
+endif
+
+# Compilation flags
+IPATH = -I. -I$(srcdir) -I$(XTTOOLS)/include
+CPPFLAGS = $(IPATH)
+ASFLAGS = $(DEBUG) -mlongcalls
+CFLAGS = $(DEBUG) -Wall -Werror -g -O2 -mlongcalls
+LDFLAGS = $(LPATH) $(DEBUG)
+
+
+.PHONY: all install clean clobber install-xmonsrc
+
+include $(prefix)/misc/build.mk
+
+ifeq ($(XEAVER),2)
+
+VPATH +=  @srcdir@/xea2
+
+# Target library.
+XMON_LIB = libxmon.a
+XMON_DEBUG_LIB = libxmon-debug.a
+
+XMON_OBJS = \
+	xmon-asm-xea2.o  \
+	xmon-xea2.o      \
+	xmon-gdb.o       \
+	xmon-utils.o
+	
+EXAMPLES = iss-xmon iss-xmon-debug
+
+else
+
+VPATH +=  @srcdir@/xea3
+
+# Target library.
+XMON_LIB = libxmon.a 
+XMON_DEBUG_LIB = libxmon-debug.a
+
+XMON_LIB_XTOS = libxmon-xtos.a
+XMON_LIB_XTOS_DEBUG = libxmon-xtos-debug.a
+
+XMON_LIB_XOS = libxmon-xos.a
+XMON_LIB_XOS_DEBUG = libxmon-xos-debug.a
+
+XMON_OBJS = \
+	xmon-asm-xea3.o  \
+	xmon-xea3.o      \
+        xmon-gdb.o       \
+	xmon-utils.o
+
+XTOS_OBJS = \
+        xmon-xtos.o
+
+XOS_OBJS = \
+        xmon-xos.o
+	
+CUSTOM_OS_FILES = \
+	xmon-xtos.c
+	
+$(XMON_LIB_XTOS): $(XMON_OBJS) $(XTOS_OBJS)
+	$(XAR) -rcs $@ $^
+
+$(XMON_LIB_XOS): $(XMON_OBJS) $(XOS_OBJS)
+	$(XAR) -rcs $@ $^
+$(XMON_LIB_XTOS_DEBUG): $(XMON_OBJS:%=debug-%) $(XTOS_OBJS:%=debug-%)
+	$(XAR) -rcs $@ $^
+
+$(XMON_LIB_XOS_DEBUG): $(XMON_OBJS:%=debug-%) $(XOS_OBJS:%=debug-%)
+	$(XAR) -rcs $@ $^
+	
+XMON_LIBS =  $(XMON_LIB_XTOS) $(XMON_LIB_XOS) $(XMON_LIB_XTOS_DEBUG) $(XMON_LIB_XOS_DEBUG)
+
+EXAMPLES = iss-xmon-xtos-debug iss-xmon-xtos
+
+endif
+
+$(XMON_LIB): $(XMON_OBJS)
+	$(XAR) -rcs $@ $^
+
+$(XMON_DEBUG_LIB): $(XMON_OBJS:%=debug-%)
+	$(XAR) -rcs $@ $^
+	
+XMON_LIBS += $(XMON_LIB) $(XMON_DEBUG_LIB)
+
+
+install-xmon-lib: $(XMON_LIBS)
+	mkdir -p $(targlibdir)
+	$(INSTALL_DATA) $(XMON_LIBS) $(targlibdir)
+
+all:
+	@echo "Build $(INSTALL_OBJS)   $(XEAVER)"
+
+ifeq ($(XEAVER),2)
+
+ifeq ($(XPAL_HAVE_DEBUG),1)
+
+install: all  $(XMON_LIBS) $(EXAMPLES) install-xmonsrc install-xmon-lib
+
+install-xmonsrc: 
+	@mkdir -p $(xmonsrcdir)
+	@echo "   installing Makefile"
+	@$(INSTALL_DATA) $(srcdir)/Makefile.xmonsrc $(xmonsrcdir)/Makefile
+
+else
+
+install:
+
+install-xmonsrc:
+
+endif
+
+else
+
+install:
+
+install-xmonsrc:
+
+endif
+
+### ISS EXECUTABLES ####
+iss-xmon-customos: xmon-main-iss.o xmon-iss-asm.o $(XMON_LIB) $(CUSTOM_OS_FILES)
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $(CPPFLAGS) $^
+	
+iss-xmon: xmon-main-iss.o xmon-iss-asm.o $(XMON_LIB) 
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $(CPPFLAGS) $^
+
+iss-xmon-debug: xmon-main-iss.o xmon-iss-asm.o $(XMON_DEBUG_LIB) 
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $(CPPFLAGS) $^
+	
+iss-xmon-xtos: xmon-main-iss.o xmon-iss-asm.o $(XMON_LIB_XTOS) 
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $^
+	
+iss-xmon-xos: xmon-main-iss.o xmon-iss-asm.o $(XMON_LIB_XOS) 
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $^
+
+iss-xmon-customos-debug: debug-xmon-main-iss.o debug-xmon-iss-asm.o $(XMON_LIB)  $(CUSTOM_OS_FILES)
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $^
+	
+iss-xmon-xtos-debug: debug-xmon-main-iss.o debug-xmon-iss-asm.o $(XMON_LIB_XTOS_DEBUG) 
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $^
+	#xt-objdump -dhsS $@ > $@.dis
+
+iss-xmon-xos-debug: debug-xmon-main-iss.o debug-xmon-iss-asm.o $(XMON_LIB_XOS_DEBUG) 
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $^
+	
+iss-xmon-debug-customexec: custom-exec.o debug-xmon-main-iss.o debug-xmon-iss-asm.o  $(XMON_DEBUG_LIB)
+	-$(XCXX) -o $@ -mlsp=sim $(LDFLAGS) $^
+	
+### ISS EXECUTABLES END ####
+
+%.o: %.c
+	$(XCC) -c $(CPPFLAGS) $(CFLAGS) $(XMONSECFLAGS) $<
+	
+%.o: %.cpp
+	$(XCXX) -c $(CPPFLAGS) $(CFLAGS) $(XMONSECFLAGS) $<
+
+debug-%.o: %.c
+	$(XCC) -DXMON_DEBUG -c $(CPPFLAGS) $(CFLAGS) $(XMONSECFLAGS) -o $@ $<
+
+debug-%.o: %.cpp
+	$(XCXX) -DXMON_DEBUG -c $(CPPFLAGS) $(CFLAGS) $(XMONSECFLAGS) -o $@ $<
+
+%.o: %.S
+	$(XCC) -c $(CPPFLAGS) $(ASFLAGS) $(XMONSECFLAGS) $<
+
+debug-%.o: %.S
+	$(XCC) -DXMON_DEBUG -c $(CPPFLAGS) $(ASFLAGS) $(XMONSECFLAGS) -o $@ $<
+
+clean:
+	rm -f *.o *.a $(INSTALL_OBJS) $(EXAMPLES)
+#	rm -rf buildxmon
+
+clobber: clean
+
+
+
+##################################################################
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) && $(SHELL) ./config.status
+
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && $(SHELL) ./config.status --recheck
+

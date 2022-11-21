@@ -1,0 +1,12 @@
+TOP_DIR=$(XTENSA_OCL_TESTS_DIR)
+HOST_SRC_CPP_FILES = test.cpp ${TOP_DIR}/Native//Bilateral5x5_ref/functions.cpp
+DEVICE_SRC_CL_FILES =  bilateral5x5.cl
+
+DEVICE_OPTFLAGS = -mllvm -tensilica-misaligned-ldst-opt -mllvm -mao-allow-byte-idx-group=true
+
+LDFLAGS=$(BIN)/host/bilateral5x5.a -L$(XTENSA_OCL_RT)/host/lib -lxocl-host-rt-sim-shared -Wl,-rpath=$(XTENSA_OCL_RT)/host/lib
+
+include ../Makefile.x86_64-host
+
+clean::
+	rm -rf *gmon* Output.yuv Input.yuv

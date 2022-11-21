@@ -1,0 +1,85 @@
+include ../Makefile.common
+
+CXX=g++
+
+GENERATOR_DEPS ?= $(HALIDE_BIN_PATH)/lib/libHalide.a $(HALIDE_BIN_PATH)/include/Halide.h $(HALIDE_SRC_PATH)/tools/GenGen.cpp
+
+CXXFLAGS += -std=c++11 -I $(HALIDE_BIN_PATH)/include/ -I $(HALIDE_BIN_PATH)/bin/ -I $(HALIDE_SRC_PATH)/tools/ -I $(HALIDE_SRC_PATH)/apps/support
+
+HL_TARGET ?= opencl-cl_cadence
+
+build: $(BIN)/host/InputGaussian.a $(BIN)/host/ContrastLevel.a $(BIN)/host/GaussianPyr.a $(BIN)/host/LaplacianPyr.a \
+	   $(BIN)/host/FuseLaplacianPyr.a $(BIN)/host/FusedPyrUpSample.a $(BIN)/host/FusedPyrUpSampleClip.a 
+
+#InputGaussian
+$(BIN)/InputGaussian.generator: LocalLaplacian_generator.cpp $(GENERATOR_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fno-rtti $(filter-out %.h,$^) -o $@ $(LDFLAGS) $(HALIDE_SYSTEM_LDFLAGS) -g
+
+$(BIN)/%/InputGaussian.a: $(BIN)/InputGaussian.generator
+	@mkdir -p $(@D)
+	$^ -g InputGaussian -o $(BIN)/$* -e assembly,bitcode,cpp,h,html,o,static_library,stmt,cpp_stub target=$(HL_TARGET)
+
+$(BIN)/%/test: $(BIN)/%/InputGaussian.a test.cpp
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS)-Wall -O2 -I$(BIN)/$* test.cpp $(BIN)/$*/InputGaussian.a -o $@ $(LDFLAGS) -g
+
+#ContrastLevel
+$(BIN)/ContrastLevel.generator: LocalLaplacian_generator.cpp $(GENERATOR_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fno-rtti $(filter-out %.h,$^) -o $@ $(LDFLAGS) $(HALIDE_SYSTEM_LDFLAGS) -g
+
+$(BIN)/%/ContrastLevel.a: $(BIN)/ContrastLevel.generator
+	@mkdir -p $(@D)
+	$^ -g ContrastLevel -o $(BIN)/$* -e assembly,bitcode,cpp,h,html,o,static_library,stmt,cpp_stub target=$(HL_TARGET)
+
+#GaussianPyr
+$(BIN)/GaussianPyr.generator: LocalLaplacian_generator.cpp $(GENERATOR_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fno-rtti $(filter-out %.h,$^) -o $@ $(LDFLAGS) $(HALIDE_SYSTEM_LDFLAGS) -g
+
+$(BIN)/%/GaussianPyr.a: $(BIN)/GaussianPyr.generator
+	@mkdir -p $(@D)
+	$^ -g GaussianPyr -o $(BIN)/$* -e assembly,bitcode,cpp,h,html,o,static_library,stmt,cpp_stub target=$(HL_TARGET)
+
+#LaplacianPyr
+$(BIN)/LaplacianPyr.generator: LocalLaplacian_generator.cpp $(GENERATOR_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fno-rtti $(filter-out %.h,$^) -o $@ $(LDFLAGS) $(HALIDE_SYSTEM_LDFLAGS) -g
+
+$(BIN)/%/LaplacianPyr.a: $(BIN)/LaplacianPyr.generator
+	@mkdir -p $(@D)
+	$^ -g LaplacianPyr -o $(BIN)/$* -e assembly,bitcode,cpp,h,html,o,static_library,stmt,cpp_stub target=$(HL_TARGET)
+
+#FuseLaplacianPyr
+$(BIN)/FuseLaplacianPyr.generator: LocalLaplacian_generator.cpp $(GENERATOR_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fno-rtti $(filter-out %.h,$^) -o $@ $(LDFLAGS) $(HALIDE_SYSTEM_LDFLAGS) -g
+
+$(BIN)/%/FuseLaplacianPyr.a: $(BIN)/FuseLaplacianPyr.generator
+	@mkdir -p $(@D)
+	$^ -g FuseLaplacianPyr -o $(BIN)/$* -e assembly,bitcode,cpp,h,html,o,static_library,stmt,cpp_stub target=$(HL_TARGET)
+
+#FusedPyrUpSample
+$(BIN)/FusedPyrUpSample.generator: LocalLaplacian_generator.cpp $(GENERATOR_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fno-rtti $(filter-out %.h,$^) -o $@ $(LDFLAGS) $(HALIDE_SYSTEM_LDFLAGS) -g
+
+$(BIN)/%/FusedPyrUpSample.a: $(BIN)/FusedPyrUpSample.generator
+	@mkdir -p $(@D)
+	$^ -g FusedPyrUpSample -o $(BIN)/$* -e assembly,bitcode,cpp,h,html,o,static_library,stmt,cpp_stub target=$(HL_TARGET)
+
+#FusedPyrUpSampleClip
+$(BIN)/FusedPyrUpSampleClip.generator: LocalLaplacian_generator.cpp $(GENERATOR_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fno-rtti $(filter-out %.h,$^) -o $@ $(LDFLAGS) $(HALIDE_SYSTEM_LDFLAGS) -g
+
+$(BIN)/%/FusedPyrUpSampleClip.a: $(BIN)/FusedPyrUpSampleClip.generator
+	@mkdir -p $(@D)
+	$^ -g FusedPyrUpSampleClip -o $(BIN)/$* -e assembly,bitcode,cpp,h,html,o,static_library,stmt,cpp_stub target=$(HL_TARGET)
+
+clean:
+	rm -rf $(BIN) *.cl
+
+test_host: $(BIN)/host/test
+	$(BIN)/host/test

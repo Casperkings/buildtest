@@ -1,0 +1,447 @@
+# Makefile for libgcc.
+# 
+# Copyright (c) 2003-2008 Tensilica Inc.
+# 
+# This file was derived from GCC and is free software; you can
+# redistribute it and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software Foundation; either
+# version 2, or (at your option) any later version.
+
+# libgcc is normally built at the same time as gcc itself, but Tensilica
+# separates these two steps, first building a configuration-independent
+# gcc and then later building config-specific versions of libgcc.
+# This makefile contains the rules and variables from the full GCC makefile
+# that are needed to build libgcc and various crt files.
+
+# This is the default target.
+all: all-target
+
+# This tells GNU make version 3 not to export the variables
+# defined in this file into the environment (and thus recursive makes).
+.NOEXPORT:
+# And this tells it not to automatically pass command-line variables
+# to recursive makes.
+MAKEOVERRIDES =
+
+# -----------------------------
+# Directories used during build
+# -----------------------------
+
+# Directory where sources are, from where we are.
+srcdir = @srcdir@
+
+# --------
+# Defined vpaths
+# --------
+
+# Directory where sources are, from where we are.
+VPATH = @srcdir@
+
+# --------
+# UNSORTED
+# --------
+
+# Variables that exist for you to override.
+# See below for how to change them for certain systems.
+
+# Various ways of specifying flags for compilations:
+# CFLAGS is for the user to override to, e.g., do a cross build with -O2.
+# XCFLAGS is used for most compilations but not when using the GCC just built.
+# TCFLAGS is used for compilations with the GCC just built.
+XCFLAGS =
+TCFLAGS =
+CFLAGS = -g
+
+LOOSE_WARN = -W -Wall -Wwrite-strings -Wstrict-prototypes -Wmissing-prototypes
+STRICT_WARN = -pedantic -Wno-long-long -Wold-style-definition
+GCC_WARN_CFLAGS = $(LOOSE_WARN) $(STRICT_WARN)
+WARN_CFLAGS = $(GCC_WARN_CFLAGS)
+
+# These exists to be overridden by the x-* and t-* files, respectively.
+X_CFLAGS =
+T_CFLAGS =
+
+AWK = @AWK@
+
+# -------------------------------------------
+# Programs which operate on the build machine
+# -------------------------------------------
+
+SHELL = /bin/sh
+INSTALL = @INSTALL@
+LN_S=@LN_S@
+INSTALL_DATA = @INSTALL_DATA@
+
+mkinstalldirs=mkdir -p
+
+# --------
+# UNSORTED
+# --------
+
+# The GCC to use for compiling libgcc.a and crt*.o.
+ifndef XTENSA_CC_FOR_TARGET
+XTENSA_CC_FOR_TARGET = xt-clang
+endif
+GCC_FOR_TARGET = $(XTENSA_CC_FOR_TARGET)
+
+# This is used instead of ALL_CFLAGS when compiling with GCC_FOR_TARGET.
+GCC_CFLAGS = $(CFLAGS_FOR_TARGET) $(INTERNAL_CFLAGS) $(X_CFLAGS) $(T_CFLAGS) $(LOOSE_WARN) -Wold-style-definition -isystem ./include $(TCFLAGS)
+
+UNWIND_H = $(srcdir)/config/xtensa/xtensa-unwind.h
+
+# ---------------------------------------------------
+# Programs which produce files for the target machine
+# ---------------------------------------------------
+
+AR_FOR_TARGET = xt-ar
+AR_FLAGS_FOR_TARGET =
+AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rc
+RANLIB_FOR_TARGET = xt-ranlib
+NM_FOR_TARGET = xt-nm
+
+# --------
+# UNSORTED
+# --------
+
+xmake_file=@xmake_file@
+tmake_file=@tmake_file@
+tm_file_list=@tm_file_list@
+tm_include_list=@tm_include_list@
+tm_defines=@tm_defines@
+host_xm_file_list=@host_xm_file_list@
+host_xm_include_list=@host_xm_include_list@
+host_xm_defines=@host_xm_defines@
+xm_file_list=@xm_file_list@
+xm_include_list=@xm_include_list@
+xm_defines=@xm_defines@
+target_cpu_default=
+GTHREAD_FLAGS=
+
+XDIR = $(shell xt-clang --show-config=config)
+XSTR = $(shell cd $(XDIR) && grep ExceptionArch5 config/default-params)
+XEA5 = $(word 3, $(XSTR))
+
+# ------------------------
+# Installation directories
+# ------------------------
+
+# Common prefix for installation directories.
+prefix = @prefix@
+# Directory in which to put host dependent programs and libraries
+exec_prefix = @exec_prefix@
+
+# --------
+# UNSORTED
+# --------
+
+# Directory in which the compiler finds libraries etc.
+libsubdir = $(exec_prefix)/xtensa-elf/lib/xcc
+# Used to install the shared libgcc.
+slibdir = @slibdir@
+objext = .o
+
+# "true" if the target C library headers are unavailable; "false"
+# otherwise.
+inhibit_libc = @inhibit_libc@
+ifeq ($(inhibit_libc),true)
+INHIBIT_LIBC_CFLAGS = -Dinhibit_libc
+endif
+
+# Options to use when compiling libgcc2.a.
+#
+LIBGCC2_DEBUG_CFLAGS = -g
+LIBGCC2_CFLAGS = -O2 $(LIBGCC2_INCLUDES) $(GCC_CFLAGS) $(TARGET_LIBGCC2_CFLAGS) \
+		 $(LIBGCC2_DEBUG_CFLAGS) $(GTHREAD_FLAGS) \
+		 -DIN_LIBGCC2 -D__GCC_FLOAT_NOT_NEEDED \
+		 $(INHIBIT_LIBC_CFLAGS)
+
+# Additional options to use when compiling libgcc2.a.
+# Some targets override this to -isystem include
+LIBGCC2_INCLUDES =
+
+# Additional target-dependent options for compiling libgcc2.a.
+TARGET_LIBGCC2_CFLAGS =
+
+# Options to use when compiling crtbegin/end.
+# TENSILICA:
+# - Omit -fno-toplevel-reorder; XCC does not support it.
+# - Omit -finhibit-size-directive; XCC ignores it, LLVM does not support it.
+# - Omit -g0 -fno-inline-functions; unnecessary.
+CRTSTUFF_CFLAGS = -O2 $(GCC_CFLAGS) $(INCLUDES) $(MULTILIB_CFLAGS) \
+  -fno-zero-initialized-in-bss $(INHIBIT_LIBC_CFLAGS)
+
+# Additional sources to handle exceptions; overridden by targets as needed.
+ifeq ($(XEA5), 1)
+LIB2ADDEH =
+LIB2ADDEHSTATIC =
+LIB2ADDEHSHARED =
+LIB2ADDEHDEP =
+else
+LIB2ADDEH = $(srcdir)/unwind-dw2.c $(srcdir)/unwind-dw2-fde.c \
+   $(srcdir)/unwind-sjlj.c $(srcdir)/gthr-gnat.c $(srcdir)/unwind-c.c
+LIB2ADDEHSTATIC = $(LIB2ADDEH)
+LIB2ADDEHSHARED = $(LIB2ADDEH)
+LIB2ADDEHDEP = $(UNWIND_H) unwind-pe.h unwind.inc unwind-dw2-fde.h unwind-dw2.h
+endif
+
+# Don't build libunwind by default.
+LIBUNWIND =
+LIBUNWINDDEP =
+SHLIBUNWIND_LINK =
+SHLIBUNWIND_INSTALL =
+
+# List of extra C and assembler files to add to static and shared libgcc2.
+# Assembler files should have names ending in `.asm'.
+LIB2FUNCS_EXTRA =
+
+# List of extra C and assembler files to add to static libgcc2.
+# Assembler files should have names ending in `.asm'.
+LIB2FUNCS_STATIC_EXTRA =
+
+# List of functions not to build from libgcc2.c.
+LIB2FUNCS_EXCLUDE =
+
+# Target sfp-machine.h file.
+SFP_MACHINE =
+
+# Extra flags to use when compiling crt{begin,end}.o.
+CRTSTUFF_T_CFLAGS =
+
+# "t" or nothing, for building multilibbed versions of, say, crtbegin.o.
+T =
+
+# End of variables for you to override.
+
+CONFIG_H  = config.h  $(host_xm_file_list)
+TCONFIG_H = tconfig.h $(xm_file_list)
+GTM_H     = tm.h      $(tm_file_list)
+TM_H      = $(GTM_H)
+
+#
+# Now figure out from those variables how to compile and link.
+
+# IN_GCC distinguishes between code compiled into GCC itself and other
+# programs built during a bootstrap.
+# autoconf inserts -DCROSS_COMPILE if we are building a cross compiler.
+INTERNAL_CFLAGS = -DIN_GCC -DCROSS_COMPILE
+
+# Specify the directories to be searched for header files.
+# Both . and srcdir are used, in that order,
+# so that *config.h will be found in the compilation
+# subdirectory rather than in the source directory.
+INCLUDES = -I. -I$(srcdir)
+
+# Flags to pass to recursive makes.
+
+export AR_FOR_TARGET
+export AR_CREATE_FOR_TARGET
+export AR_FLAGS_FOR_TARGET
+export AWK
+export GCC_FOR_TARGET
+export INCLUDES
+export INSTALL_DATA
+export LIB1ASMSRC
+export LIBGCC2_CFLAGS
+export MACHMODE_H
+export NM_FOR_TARGET
+export RANLIB_FOR_TARGET
+export libsubdir
+export slibdir
+
+#
+# Lists of files for various purposes.
+
+# Defined in libgcc2.c, included only in the static library.
+LIB2FUNCS_ST = _eprintf __gcc_bcmp
+
+# These might cause a divide overflow trap and so are compiled with
+# unwinder info.
+LIB2_DIVMOD_FUNCS = _divdi3 _moddi3 _udivdi3 _umoddi3 _udiv_w_sdiv _udivmoddi4
+
+#
+# makefile fragments.
+
+# target overrides
+ifneq ($(tmake_file),)
+include $(tmake_file)
+endif
+
+# host overrides
+ifneq ($(xmake_file),)
+include $(xmake_file)
+endif
+
+#
+
+# -----------------------------
+# Rebuilding this configuration
+# -----------------------------
+
+Makefile: config.status $(srcdir)/Makefile.in
+	CONFIG_HEADERS= \
+	CONFIG_SHELL="$(SHELL)" \
+	CONFIG_FILES=$@ $(SHELL) config.status
+
+config.h: cs-config.h ; @true
+tconfig.h: cs-tconfig.h ; @true
+tm.h: cs-tm.h ; @true
+
+cs-config.h: Makefile
+	TARGET_CPU_DEFAULT="" \
+	HEADERS="$(host_xm_include_list)" DEFINES="$(host_xm_defines)" \
+	$(SHELL) $(srcdir)/mkconfig.sh config.h
+
+cs-tconfig.h: Makefile
+	TARGET_CPU_DEFAULT="" \
+	HEADERS="$(xm_include_list)" DEFINES="USED_FOR_TARGET $(xm_defines)" \
+	$(SHELL) $(srcdir)/mkconfig.sh tconfig.h
+
+cs-tm.h: Makefile
+	TARGET_CPU_DEFAULT="$(target_cpu_default)" \
+	HEADERS="$(tm_include_list)" DEFINES="$(tm_defines)" \
+	$(SHELL) $(srcdir)/mkconfig.sh tm.h
+
+$(srcdir)/configure:
+	(cd $(srcdir) && autoconf)
+
+mklibgcc: $(srcdir)/mklibgcc.in
+	CONFIG_FILES=mklibgcc CONFIG_HEADERS= ./config.status
+
+config.status: $(srcdir)/configure
+	$(SHELL) config.status --recheck
+
+# --------
+# UNSORTED
+# --------
+
+all-target: libgcc.a
+install-target: install-libgcc
+
+#
+# Build libgcc.a.
+
+LIB2ADD = $(LIB2FUNCS_EXTRA)
+LIB2ADD_ST = $(LIB2FUNCS_STATIC_EXTRA)
+
+libgcc.mk: config.status Makefile mklibgcc $(LIB2ADD) $(LIB2ADD_ST)
+	objext='$(objext)' \
+	LIB1ASMFUNCS='$(LIB1ASMFUNCS)' \
+	LIB2FUNCS_ST='$(LIB2FUNCS_ST)' \
+	LIB2FUNCS_EXCLUDE='$(LIB2FUNCS_EXCLUDE)' \
+	LIBGCOV='$(LIBGCOV)' \
+	LIB2ADD='$(LIB2ADD)' \
+	LIB2ADD_ST='$(LIB2ADD_ST)' \
+	LIB2ADDEH='$(LIB2ADDEH)' \
+	LIB2ADDEHSTATIC='$(LIB2ADDEHSTATIC)' \
+	LIB2ADDEHSHARED='$(LIB2ADDEHSHARED)' \
+	LIB2ADDEHDEP='$(LIB2ADDEHDEP)' \
+	LIB2_SIDITI_CONV_FUNCS='$(LIB2_SIDITI_CONV_FUNCS)' \
+	LIBUNWIND='$(LIBUNWIND)' \
+	LIBUNWINDDEP='$(LIBUNWINDDEP)' \
+	SHLIBUNWIND_LINK='$(SHLIBUNWIND_LINK)' \
+	SHLIBUNWIND_INSTALL='$(SHLIBUNWIND_INSTALL)' \
+	FPBIT='$(FPBIT)' \
+	FPBIT_FUNCS='$(FPBIT_FUNCS)' \
+	LIB2_DIVMOD_FUNCS='$(LIB2_DIVMOD_FUNCS)' \
+	DPBIT='$(DPBIT)' \
+	DPBIT_FUNCS='$(DPBIT_FUNCS)' \
+	TPBIT='$(TPBIT)' \
+	TPBIT_FUNCS='$(TPBIT_FUNCS)' \
+	DFP_ENABLE='$(DFP_ENABLE)' \
+	DFP_CFLAGS='$(DFP_CFLAGS)' \
+	D32PBIT='$(D32PBIT)' \
+	D32PBIT_FUNCS='$(D32PBIT_FUNCS)' \
+	D64PBIT='$(D64PBIT)' \
+	D64PBIT_FUNCS='$(D64PBIT_FUNCS)' \
+	D128PBIT='$(D128PBIT)' \
+	D128PBIT_FUNCS='$(D128PBIT_FUNCS)' \
+	MULTILIBS='.;' \
+	EXTRA_MULTILIB_PARTS='$(EXTRA_MULTILIB_PARTS)' \
+	SHLIB_LINK='$(SHLIB_LINK)' \
+	SHLIB_INSTALL='$(SHLIB_INSTALL)' \
+	SHLIB_EXT='$(SHLIB_EXT)' \
+	SHLIB_MULTILIB='$(SHLIB_MULTILIB)' \
+	SHLIB_MKMAP='$(SHLIB_MKMAP)' \
+	SHLIB_MKMAP_OPTS='$(SHLIB_MKMAP_OPTS)' \
+	SHLIB_MAPFILES='$(SHLIB_MAPFILES)' \
+	SHLIB_NM_FLAGS='$(SHLIB_NM_FLAGS)' \
+	MULTILIB_OSDIRNAMES='$(MULTILIB_OSDIRNAMES)' \
+	mkinstalldirs='$(mkinstalldirs)' \
+	ASM_HIDDEN_OP='$(ASM_HIDDEN_OP)' \
+	GCC_FOR_TARGET='$(GCC_FOR_TARGET)' \
+	  $(SHELL) mklibgcc > tmp-libgcc.mk
+	mv tmp-libgcc.mk libgcc.mk
+
+# All the things that might cause us to want to recompile bits of libgcc.
+# TENSILICA: Added $(TM_H) here.
+LIBGCC_DEPS = $(TM_H) stmp-int-hdrs \
+	libgcc.mk $(srcdir)/libgcc2.c $(TCONFIG_H) \
+	$(MACHMODE_H) longlong.h gbl-ctors.h config.status $(srcdir)/libgcc2.h \
+	tsystem.h $(FPBIT) $(DPBIT) $(TPBIT) $(LIB2ADD) \
+	$(LIB2ADD_ST) $(LIB2ADDEH) $(LIB2ADDEHDEP) \
+	$(srcdir)/config/$(LIB1ASMSRC) \
+	$(SFP_MACHINE)
+
+libgcc.a: $(LIBGCC_DEPS)
+	$(MAKE) \
+	  CFLAGS="$(CFLAGS) $(WARN_CFLAGS)" \
+	  CONFIG_H="$(TCONFIG_H)" TM_H="$(TM_H)" \
+	  INCLUDES="$(INCLUDES)" \
+	  MAKEOVERRIDES= \
+	  -f libgcc.mk all
+
+# Compile two additional files that are linked with every program
+# linked using GCC on systems using COFF or ELF, for the sake of C++
+# constructors.
+$(T)crtbegin.o: crtstuff.c $(GCC_PASSES) $(TCONFIG_H) auto-host.h \
+  gbl-ctors.h stmp-int-hdrs tsystem.h coretypes.h $(TM_H)
+	$(GCC_FOR_TARGET) $(CRTSTUFF_CFLAGS) $(CRTSTUFF_T_CFLAGS) \
+	  -c $(srcdir)/crtstuff.c -DCRT_BEGIN \
+	  -o $(T)crtbegin$(objext)
+
+$(T)crtend.o: crtstuff.c $(GCC_PASSES) $(TCONFIG_H) auto-host.h \
+  gbl-ctors.h stmp-int-hdrs tsystem.h coretypes.h $(TM_H)
+	$(GCC_FOR_TARGET) $(CRTSTUFF_CFLAGS) $(CRTSTUFF_T_CFLAGS) \
+	  -c $(srcdir)/crtstuff.c -DCRT_END \
+	  -o $(T)crtend$(objext)
+
+# These are versions of crtbegin and crtend for shared libraries.
+$(T)crtbeginS.o: crtstuff.c $(GCC_PASSES) $(TCONFIG_H) auto-host.h \
+  gbl-ctors.h stmp-int-hdrs tsystem.h coretypes.h $(TM_H)
+	$(GCC_FOR_TARGET) $(CRTSTUFF_CFLAGS) $(CRTSTUFF_T_CFLAGS_S) \
+	  -c $(srcdir)/crtstuff.c -DCRT_BEGIN -DCRTSTUFFS_O \
+	  -o $(T)crtbeginS$(objext)
+
+$(T)crtendS.o: crtstuff.c $(GCC_PASSES) $(TCONFIG_H) auto-host.h \
+  gbl-ctors.h stmp-int-hdrs tsystem.h coretypes.h $(TM_H)
+	$(GCC_FOR_TARGET) $(CRTSTUFF_CFLAGS) $(CRTSTUFF_T_CFLAGS_S) \
+	  -c $(srcdir)/crtstuff.c -DCRT_END -DCRTSTUFFS_O \
+	  -o $(T)crtendS$(objext)
+
+# This is a version of crtbegin for -static links.
+$(T)crtbeginT.o: crtstuff.c $(GCC_PASSES) $(TCONFIG_H) auto-host.h \
+  gbl-ctors.h stmp-int-hdrs tsystem.h coretypes.h $(TM_H)
+	$(GCC_FOR_TARGET) $(CRTSTUFF_CFLAGS) $(CRTSTUFF_T_CFLAGS) \
+	  -c $(srcdir)/crtstuff.c -DCRT_BEGIN -DCRTSTUFFT_O \
+	  -o $(T)crtbeginT$(objext)
+
+# Dummy target to satisfy dependencies
+stmp-int-hdrs:
+	touch $@
+
+#
+# Entry points `install' and `uninstall'.
+
+# Create the installation directories.
+installdirs:
+	$(mkinstalldirs) $(DESTDIR)$(libsubdir)
+
+# Install the library.
+install-libgcc: libgcc.mk libgcc.a installdirs
+	$(MAKE) \
+	  CFLAGS="$(CFLAGS) $(WARN_CFLAGS)" \
+	  CONFIG_H="$(TCONFIG_H)" \
+	  MAKEOVERRIDES= \
+	  mkinstalldirs='$(mkinstalldirs)' \
+	  -f libgcc.mk install
+

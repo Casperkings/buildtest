@@ -1,0 +1,50 @@
+BIN=./bin
+
+XT_RUN=$(XTENSA_SYSTEM)/../bin/xt-run
+ifeq (,$(wildcard $(XT_RUN)))
+  # Fall back to xt-run from PATH
+  XT_RUN=xt-run
+endif
+
+XTOOLS=$(shell $(XT_RUN) --show-config=xttools)/Tools
+
+# If using gcc/g++ from tools, use rpath from the lib under tools
+BUILD_CC := $(shell which gcc)
+XTENSA_TOOLS_CC := $(shell echo "${XTOOLS}/bin/gcc" | sed -e "s/^\(\/\.\)\+//g")
+ifeq ($(BUILD_CC), ${XTENSA_TOOLS_CC})
+  LIB64_PATH ?= $(shell $(XT_RUN) --show-config=xttools)/Tools/lib64
+else
+  LIB64_PATH =
+endif
+
+ifndef HALIDE_SRC
+   $(error Environment variable HALIDE_SRC not defined. HALIDE_SRC needs to point to your Halide source directory)
+else
+  $(info HALIDE_SRC set to $(HALIDE_SRC))
+endif
+
+ifndef HALIDE_BIN
+   $(error Environment variable HALIDE_BIN not defined. HALIDE_BIN needs to point to your Halide build directory)
+else
+  $(info HALIDE_BIN set to $(HALIDE_BIN))
+endif
+
+ifndef XTENSA_OCL_TESTS_DIR
+   $(error Environment variable XTENSA_OCL_TESTS_DIR not defined. XTENSA_OCL_TESTS_DIR needs to point to your OpenCL/Tests directory)
+else
+  $(info XTENSA_OCL_TESTS_DIR set to $(XTENSA_OCL_TESTS_DIR))
+endif
+
+HALIDE_SRC_PATH?=${HALIDE_SRC}
+HALIDE_BIN_PATH?=${HALIDE_BIN}
+
+HOST_COMPILE_COMMON_FLAGS = -std=c++11 -O2 -Wall -I $(BIN)/host \
+                            -I $(HALIDE_SRC_PATH)/tools \
+                            -I $(HALIDE_BIN_PATH)/include \
+                            -I ${XTENSA_OCL_TESTS_DIR}/libxi/host_ref/include \
+                            -I ${XTENSA_OCL_TESTS_DIR}/Native
+
+DEVICE_COMPILE_COMMON_FLAGS = --xt-async-opt
+
+LDFLAGS += -ldl -lpthread -lz -lrt -lm -Wl,-rpath,$(LIB64_PATH)
+

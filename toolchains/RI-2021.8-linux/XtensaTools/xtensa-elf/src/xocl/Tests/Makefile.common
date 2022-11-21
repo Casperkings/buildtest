@@ -1,0 +1,335 @@
+XT_RUN := $(shell PATH=$(XTENSA_SYSTEM)/../bin:$(PATH) which xt-run)
+
+# If using gcc/g++ from tools, use rpath from the lib under tools
+BUILD_CC := $(shell which gcc)
+XTENSA_TOOLS_CC := $(shell echo "${XTENSA_TOOLS}/bin/gcc" | sed -e "s/^\(\/\.\)\+//g")
+ifeq ($(BUILD_CC), ${XTENSA_TOOLS_CC})
+  LIB64_PATH ?= $(shell $(XT_RUN) --show-config=xttools)/Tools/lib64
+else
+  LIB64_PATH =
+endif
+
+XTTOOLS = $(shell ${XT_RUN} --show-config=xttools)
+
+APP:=$(shell basename $(CURDIR))
+DEVICE_KERNEL_EMBEDDED=device_kernel
+# Required by xt-clang
+export OPENCL_DEVICE_RUNTIME_DIR=$(XTENSA_OCL_RT)/device
+LSP ?= sim-stacklocal
+
+GCC_VER_GTE48 := $(shell echo `gcc -dumpversion | cut -f1-2 -d.` \>= 4.8 | bc )
+ifneq ($(GCC_VER_GTE48),1)
+  $(error GCC version expected to be >= 4.8)
+endif
+
+ifndef XTENSA_SUBSYSTEM
+   $(error Environment variable XTENSA_SUBSYSTEM not defined. Example if XTENSA_SUBSYSTEM is VP6-MP)
+else
+  $(info XTENSA_SUBSYSTEM set to $(XTENSA_SUBSYSTEM))
+endif
+
+ifndef XTENSA_SYSTEM
+  $(error Environment variable XTENSA_SYSTEM is not defined. Example of XTENSA_SYSTEM: /opt/xtensa/XtDevTools/install/tools/RG-2016.3-linux/XtensaTools/config)
+else
+  $(info XTENSA_SYSTEM set to $(XTENSA_SYSTEM))
+endif
+
+ifndef XTENSA_CORE
+  $(error Environment variable XTENSA_CORE is not defined)
+else
+  $(info XTENSA_CORE set to $(XTENSA_CORE))
+endif
+
+ifndef XTENSA_LLVM_INSTALL
+  XTENSA_LLVM_INSTALL=$(XTTOOLS)/llvm
+endif
+$(info XTENSA_LLVM_INSTALL set to $(XTENSA_LLVM_INSTALL))
+
+ifndef XTENSA_OCL_RT
+  $(error Environment variable XTENSA_OCL_RT is not defined)
+else
+  $(info XTENSA_OCL_RT set to $(XTENSA_OCL_RT))
+endif
+
+ifndef XTENSA_OPENCL_NUM_DSPS
+  $(error Environment variable XTENSA_OPENCL_NUM_DSPS is not defined)
+else
+  $(info XTENSA_OPENCL_NUM_DSPS set to $(XTENSA_OPENCL_NUM_DSPS))
+endif
+
+ifeq (${TARGET}, xtensa-xos)
+  LSP_DIR=LSP_xtensa_host
+else
+  ifeq (${TARGET}, android)
+    LSP_DIR=LSP_android_host
+  else
+    LSP_DIR=LSP
+  endif
+endif
+
+SUBSYSTEM=${XTENSA_SUBSYSTEM}
+CORE_NUMS = 0 $(shell seq `expr $(XTENSA_OPENCL_NUM_DSPS) - 1`)
+
+ifneq (,$(wildcard ${TOP_DIR}/Makefile.platform))
+  include ${TOP_DIR}/Makefile.platform
+endif
+
+LLVM_LINK = $(shell PATH=$(XTENSA_LLVM_INSTALL)/bin:$(XTTOOLS)/llvm/bin:$(PATH) which llvm-link)
+LLVM_OPT = $(shell PATH=$(XTENSA_LLVM_INSTALL)/bin:$(XTTOOLS)/llvm/bin:$(PATH) which opt)
+
+# Link time flags to code compiled on the device. Includes the device opencl
+# runtime, device XRP, and iDMA libraries
+
+# Link against xrp library from the config build
+ifeq ($(XT_OCL_HAVE_MAIN_XOS), 1)
+  DEV_XRP_LIBS=-lxrp-dsp -lxrp-dsp-hw-simple-xos -lxrp-common
+else
+  DEV_XRP_LIBS=-lxrp-dsp -lxrp-dsp-hw-simple -lxrp-common
+endif
+
+XDYN_LIB=-lxdyn-lib-dev
+
+DEV_LIB_FLAGS = \
+  -L$(XTENSA_OCL_RT)/device/lib \
+  -lxocl-device-rt-lib-misc -lxocl-device-rt
+
+# Set up libraries to link based on dynamic library flow or full executable
+# flow
+ifeq ($(XT_OCL_DYN_LIB), 1)
+  DEV_LDFLAGS = \
+    -Wl,--defsym,_memmap_cacheattr_reset=${CACHE_ATTR} \
+    -L$(XTENSA_OCL_RT)/device/lib \
+    ${DEV_XRP_LIBS} ${XDYN_LIB} -lm -lmloader -lxmem-bank -lxmem
+  DEV_RT_INTERFACE=-lxocl-device-rt-lib-main
+  DEV_LINK_OBJS=
+  DEV_LINK_DEP_OBJS=$(DEVICE_PKG_LIB)
+else
+  DEV_LDFLAGS = \
+    -Wl,--defsym,_memmap_cacheattr_reset=${CACHE_ATTR} \
+    -L$(XTENSA_OCL_RT)/device/lib \
+    -lxocl-device-rt-misc -lxocl-device-rt \
+    ${DEV_XRP_LIBS} -lm -lxmem-bank -lxmem
+  DEV_RT_INTERFACE=-lxocl-device-rt-main
+  DEV_LINK_OBJS=$(DEVICE_OBJ) $(DEVICE_C_OBJS)
+  DEV_LINK_DEP_OBJS=$(DEV_LINK_OBJS)
+endif
+
+ifeq ($(XT_OCL_HAVE_MAIN), 1)
+  DEV_LINK_DEP_OBJS += $(DEVICE_EXTERNAL_MAIN_C_OBJS)
+  DEV_RT_INTERFACE=$(DEVICE_EXTERNAL_MAIN_C_OBJS)
+endif
+
+ifeq ($(XT_OCL_HAVE_MAIN_XOS), 1)
+  DEV_LINK_DEP_OBJS += $(DEVICE_EXTERNAL_MAIN_C_OBJS)
+  DEV_RT_INTERFACE=$(DEVICE_EXTERNAL_MAIN_C_OBJS)
+endif
+
+# Link against xos or xtos version of the idma library
+ifeq ($(XT_OCL_HAVE_MAIN_XOS), 1)
+  DEV_LDFLAGS += -lidma-os
+else
+  DEV_LDFLAGS += -lidma-xtos
+endif
+
+# Support OpenCL 1.2
+HOST_COMPILE_COMMON_FLAGS := -DCL_TARGET_OPENCL_VERSION=120      \
+                             -DCL_USE_DEPRECATED_OPENCL_1_2_APIS \
+                             $(HOST_COMPILE_COMMON_FLAGS)
+
+# Add user specific flags
+DEV_LDFLAGS += ${DEVICE_LDFLAGS}
+
+CORES = $(addprefix DSP_,$(CORE_NUMS))
+DEVICE_EXES = $(addsuffix .exe,$(CORES))
+
+XTSC_RUN=$(XTENSA_SYSTEM)/../bin/xtsc-run
+ifeq (,$(wildcard $(XTSC_RUN)))
+  # Fall back to xtsc-run from PATH
+  XTSC_RUN=xtsc-run
+endif
+
+XT_PKG_LOADLIB=$(XTENSA_SYSTEM)/../bin/xt-pkg-loadlib
+ifeq (,$(wildcard $(XT_PKG_LOADLIB)))
+  # Fall back to xt-pkg-loadlib from PATH
+  XT_PKG_LOADLIB=xt-pkg-loadlib
+endif
+
+XTSC_INC_FILE = $(XTENSA_OCL_RT)/Subsystem/$(SUBSYSTEM)/$(XTSC)/SubSystem.inc
+
+DEVICE_SRC_CL_FILES ?= $(DEVICE_KERNEL_EMBEDDED).cl
+
+HOST_CPP_DEPS=$(HOST_SRC_CPP_FILES:.cpp=.d)
+HOST_CC_DEPS=$(HOST_SRC_CC_FILES:.c=.d)
+HOST_CPP_OBJS=$(HOST_SRC_CPP_FILES:.cpp=.o)
+HOST_CC_OBJS=$(HOST_SRC_CC_FILES:.c=.o)
+# Name of the host executable - <application-directory-name>-sim.exe
+HOST_EXE = $(APP)-sim.exe
+
+HOST_CBE_C_FILES=$(DEVICE_SRC_CL_FILES:.cl=.bc.cbe.c)
+HOST_CBE_OBJS=$(DEVICE_SRC_CL_FILES:.cl=.bc.cbe.o)
+
+# Create a C file that embeds a unique device library name
+DEVICE_LIB_NAME ?= $(APP)_device_lib
+DEVICE_LIB_NAME_FILE=$(DEVICE_LIB_NAME).c
+ifeq ($(XT_OCL_DYN_LIB), 1)
+  DEVICE_SRC_C_FILES += $(DEVICE_LIB_NAME_FILE)
+endif
+
+DEVICE_BITCODES=$(DEVICE_SRC_CL_FILES:.cl=.bc)
+DEVICE_BITCODE_ALL=device_bitcode_all.bc
+DEVICE_BUILDINS_BITCODE_ALL=$(DEVICE_BITCODE_ALL:.bc=.buildins.bc)
+DEVICE_BUILDINS_OPT_BITCODE_ALL=$(DEVICE_BITCODE_ALL:.bc=.opt.buildins.bc)
+DEVICE_OBJ=$(DEVICE_BITCODE_ALL:.bc=.opt.buildins.o)
+DEVICE_LIB=device.lib
+DEVICE_PKG_LIB=device.pkg.lib
+DEVICE_C_OBJS=$(DEVICE_SRC_C_FILES:.c=.o)
+DEVICE_EXTERNAL_MAIN_C_OBJS=$(DEVICE_EXTERNAL_MAIN_SRC_C_FILES:.c=.o)
+DEVICE_REGISTER_ALL_KERNELS=xt_ocl_register_all_kernels
+
+.PHONY: all clean xtsc-run xtsc-run-turbo
+
+all: run
+
+$(DEVICE_LIB_NAME_FILE):
+	echo "#include <xt_mld_loader.h>" > $@
+	echo >> $@
+	echo "XTMLD_LIBRARY_NAME($(DEVICE_LIB_NAME));" >> $@
+
+# Build the executables on the DEVICE
+
+# Extract the embedded CL file, if present
+$(DEVICE_KERNEL_EMBEDDED).cl: $(HOST_SRC_CPP_FILES) $(HOST_SRC_CC_FILES)
+	g++ $^ $(HOST_COMPILE_COMMON_FLAGS) -I$(XTENSA_OCL_RT)/host/include \
+         -DWRITE_SOURCE -L$(XTENSA_OCL_RT)/host/lib \
+         -Wl,-rpath=$(LIB64_PATH) -lngtool -o $@.exe
+	./$@.exe 
+	mv kernel_*.cl $@ 
+	
+# Generate bitcode of all the device kernel files
+$(DEVICE_BITCODES): %.bc: %.cl
+	$(XTENSA_LLVM_INSTALL)/bin/xt-clang -x mxpa -DXTENSA \
+                             $(DEVICE_COMPILE_COMMON_FLAGS) $(DEVICE_CLFLAGS) \
+                             -m32 $< -o $@
+
+# Create a call to register all kernel functions
+$(DEVICE_REGISTER_ALL_KERNELS).ll: $(DEVICE_SRC_CL_FILES)
+	perl $(XTENSA_OCL_RT)/device/lib/gen_xt_ocl_register_kernels.pl \
+       $(XTENSA_OCL_RT)/device/lib/$(DEVICE_REGISTER_ALL_KERNELS)_template.ll \
+       $(DEVICE_REGISTER_ALL_KERNELS).ll \
+       $(DEVICE_SRC_CL_FILES)
+
+# Links all the bitcode of the kernels to create a single bitcode file
+$(DEVICE_BITCODE_ALL): $(DEVICE_BITCODES) $(DEVICE_REGISTER_ALL_KERNELS).ll
+	$(LLVM_LINK) $^ -o $@
+
+# Links the single bitcode file against buildin function library
+$(DEVICE_BUILDINS_BITCODE_ALL): $(DEVICE_BITCODE_ALL) \
+                                $(XTENSA_OCL_RT)/device/lib/libbuildins.bc
+	$(LLVM_LINK) -only-needed $^ -o $@
+
+# Optimize the kernels+build-in function library
+$(DEVICE_BUILDINS_OPT_BITCODE_ALL): $(DEVICE_BUILDINS_BITCODE_ALL)
+	$(LLVM_OPT) -O3 -inline $< -o $@
+
+# Generate the DEVICE target object file for the kernels+build-in 
+# function library
+$(DEVICE_OBJ): $(DEVICE_BUILDINS_OPT_BITCODE_ALL)
+	$(XTENSA_LLVM_INSTALL)/bin/xt-clang -O2 $(DEVICE_OPTFLAGS) \
+                                      --xtensa-core=$(XTENSA_CORE) -c $< -o $@
+
+# Generate the DEVICE target object files for all the device C files
+$(DEVICE_C_OBJS): %.o : %.c
+	$(XTENSA_LLVM_INSTALL)/bin/xt-clang -O2 $(DEVICE_C_OPTFLAGS) \
+                                      --xtensa-core=$(XTENSA_CORE) -c $< -o $@
+
+# Generate the DEVICE position independent loadable library by linking the 
+# DEVICE target object file with the OpenCL runtime
+$(DEVICE_LIB): $(DEVICE_OBJ) $(DEVICE_C_OBJS)
+	$(XTENSA_LLVM_INSTALL)/bin/xt-clang --xtensa-core=$(XTENSA_CORE) -Wall \
+   $(DEV_LIB_FLAGS) -mlsp=pimultload -Wl,--shared-pagesize=128 \
+    -Wl,-pie -Wl,--no-relax -Wl,--multi-section-pil $^ -ldynlib -lm -lc -o $@ 
+
+# Build externally provided main failes
+ifeq ($(XT_OCL_HAVE_MAIN), 1)
+$(DEVICE_EXTERNAL_MAIN_C_OBJS): %.o : %.c
+	$(XTENSA_LLVM_INSTALL)/bin/xt-clang -O2 $(DEVICE_EXTERNAL_MAIN_CFLAGS) \
+                                      --xtensa-core=$(XTENSA_CORE) -c $< -o $@
+endif
+
+# Build externally provided main failes
+ifeq ($(XT_OCL_HAVE_MAIN_XOS), 1)
+$(DEVICE_EXTERNAL_MAIN_C_OBJS): %.o : %.c
+	$(XTENSA_LLVM_INSTALL)/bin/xt-clang -O2 $(DEVICE_EXTERNAL_MAIN_CFLAGS) \
+                                      --xtensa-core=$(XTENSA_CORE) -c $< -o $@
+endif
+
+# Package loadable library from the position-independent library
+$(DEVICE_PKG_LIB): $(DEVICE_LIB)
+	PATH=$(XTENSA_SYSTEM)/../bin:$(PATH) $(XT_PKG_LOADLIB) -s $@ $^ -p
+
+# Generate the DEVICE executable by linking the DEVICE target object file
+# with the OpenCL runtime, XRP, and the idma library
+$(DEVICE_EXES): %.exe: $(DEV_LINK_DEP_OBJS)
+	$(XTENSA_LLVM_INSTALL)/bin/xt-clang --xtensa-core=$(XTENSA_CORE) -o $@ \
+    $(DEV_LINK_OBJS) $(DEV_RT_INTERFACE) $(DEV_LDFLAGS) \
+    -Wl,--defsym,xrp_dsp_comm_base_magic=$($*_DEVICE_COMM_BASE_MAGIC) \
+    -mlsp=$(XTENSA_OCL_RT)/Subsystem/$(SUBSYSTEM)/$(LSP_DIR)/$*/xtensa-elf/lib/$(LSP)
+
+# Build the application to run on the host
+
+# Build the generated Cbackend C file (contains kernel metadata for the host)
+# to be linked with the host application
+$(HOST_CBE_OBJS): %.bc.cbe.o: %.bc.cbe.c %.cl
+	$(C_COMPILER) $(HOST_COMPILE_OPTIONS) -O2 -DREGISTER_KERNEL -c \
+      -include $(XTENSA_OCL_RT)/host/include/runtime.h $< -o $@
+
+$(HOST_CBE_C_FILES): %.bc.cbe.c: %.bc
+
+-include $(wildcard *.d)
+
+# Build the host application object files
+$(HOST_CPP_OBJS): %.o: %.cpp
+	$(CXX) $(HOST_COMPILE_OPTIONS) $(HOST_COMPILE_COMMON_FLAGS) \
+         -I$(XTENSA_OCL_RT)/host/include \
+         $(CXXFLAGS) -MM $< -MT $@ > $*.d
+	$(CXX) $(HOST_COMPILE_OPTIONS) $(HOST_COMPILE_COMMON_FLAGS) \
+         -I$(XTENSA_OCL_RT)/host/include \
+         $(CXXFLAGS) -c $< -o $@
+
+$(HOST_CC_OBJS): %.o: %.c
+	$(CC) $(HOST_COMPILE_OPTIONS) $(HOST_COMPILE_COMMON_FLAGS) \
+        -I$(XTENSA_OCL_RT)/host/include \
+        $(CFLAGS) -MM $< -MT $@ > $*.d
+	$(CC) $(HOST_COMPILE_OPTIONS) $(HOST_COMPILE_COMMON_FLAGS) \
+        -I$(XTENSA_OCL_RT)/host/include \
+        $(CFLAGS) -c $< -o $@
+
+# Build the host application
+$(HOST_EXE): $(HOST_CPP_OBJS) $(HOST_CC_OBJS) $(HOST_CBE_OBJS)
+	$(CXX) $(HOST_COMPILE_OPTIONS) $^ -o $@ $(LDFLAGS) $(HOST_LDFLAGS)
+
+# Build host and device executables
+build: $(HOST_EXE) $(DEVICE_EXES)
+
+# Default run with turbo
+run: xtsc-run-turbo
+
+clean::
+	rm -rf $(HOST_CPP_OBJS) 
+	rm -rf $(HOST_CC_OBJS) 
+	rm -rf $(HOST_CBE_OBJS) 
+	rm -rf $(DEVICE_BITCODES) 
+	rm -rf $(DEVICE_BITCODE_ALL) 
+	rm -rf $(DEVICE_BUILDINS_OPT_BITCODE_ALL)
+	rm -rf $(DEVICE_BUILDINS_BITCODE_ALL) 
+	rm -rf $(HOST_CBE_C_FILES) 
+	rm -rf $(DEVICE_OBJ)
+	rm -rf $(DEVICE_C_OBJS)
+	rm -rf $(HOST_EXE) $(DEVICE_EXES) $(DEVICE_KERNEL_EMBEDDED).* run_sim.sh
+	rm -rf $(HOST_CC_DEPS) $(HOST_CPP_DEPS)
+	rm -rf $(DEVICE_REGISTER_ALL_KERNELS).ll
+	rm -rf $(DEVICE_LIB) $(DEVICE_PKG_LIB)
+	rm -rf $(DEVICE_LIB_NAME_FILE)
+
+.PHONY: run
+

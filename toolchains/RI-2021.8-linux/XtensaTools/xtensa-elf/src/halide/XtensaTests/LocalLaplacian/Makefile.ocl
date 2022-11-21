@@ -1,0 +1,22 @@
+TOP_DIR=$(XTENSA_OCL_TESTS_DIR)
+
+HOST_SRC_CPP_FILES = test.cpp LUT.cpp ${TOP_DIR}/Native/LocalLaplacian_ref/LocalLaplacian_ref.cpp
+
+DEVICE_SRC_CL_FILES =  InputGaussian.cl ContrastLevel.cl GaussianPyr.cl \
+                       LaplacianPyr.cl FuseLaplacianPyr.cl \
+                       FusedPyrUpSample.cl FusedPyrUpSampleClip.cl
+
+DEVICE_OPTFLAGS = -mllvm -tensilica-misaligned-ldst-opt -mllvm -mao-allow-byte-idx-group=true
+
+LDFLAGS=$(BIN)/host/InputGaussian.a $(BIN)/host/ContrastLevel.a \
+        $(BIN)/host/GaussianPyr.a \
+        $(BIN)/host/LaplacianPyr.a $(BIN)/host/FuseLaplacianPyr.a \
+        $(BIN)/host/FusedPyrUpSample.a \
+        $(BIN)/host/FusedPyrUpSampleClip.a -L$(XTENSA_OCL_RT)/host/lib \
+        -lxocl-host-rt-sim-shared -Wl,-rpath=$(XTENSA_OCL_RT)/host/lib
+
+include ../Makefile.x86_64-host
+
+clean::
+	rm -rf *gmon* Input.yuv Output.yuv
+

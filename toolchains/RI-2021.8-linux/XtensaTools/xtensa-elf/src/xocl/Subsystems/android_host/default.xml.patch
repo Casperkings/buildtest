@@ -1,0 +1,31 @@
+diff --git default.xml default.xml
+index 8a3edda..34ff1a5 100644
+--- default.xml
++++ default.xml
+@@ -8,6 +8,8 @@
+            remote="aosp"
+            sync-j="4" />
+ 
++  <remote fetch="https://github.com/foss-xtensa" name="cadence-local"/>
++
+   <project path="build/make" name="platform/build" groups="pdk" >
+     <copyfile src="core/root.mk" dest="Makefile" />
+     <linkfile src="CleanSpec.mk" dest="build/CleanSpec.mk" />
+@@ -632,7 +634,7 @@
+   <project path="platform_testing" name="platform/platform_testing" groups="pdk-fs,pdk-cw-fs,cts" />
+   <project path="prebuilts/abi-dumps/ndk" name="platform/prebuilts/abi-dumps/ndk" groups="pdk-fs" clone-depth="1" />
+   <project path="prebuilts/abi-dumps/vndk" name="platform/prebuilts/abi-dumps/vndk" groups="pdk-fs" clone-depth="1" />
+-  <project path="prebuilts/android-emulator" name="platform/prebuilts/android-emulator" groups="pdk-fs" clone-depth="1" />
++  <project remote="cadence-local" clone-depth="1" groups="pdk-fs" name="androidnn-platform-prebuilts-android-emulator.git" path="prebuilts/android-emulator" revision="10-xtsc-cosim"/>
+   <project path="prebuilts/asuite" name="platform/prebuilts/asuite" groups="pdk" clone-depth="1" />
+   <project path="prebuilts/build-tools" name="platform/prebuilts/build-tools" groups="pdk" clone-depth="1" />
+   <project path="prebuilts/bundletool" name="platform/prebuilts/bundletool" groups="pdk" clone-depth="1" />
+@@ -670,7 +672,7 @@
+   <project path="prebuilts/ktlint" name="platform/prebuilts/ktlint" groups="pdk" clone-depth="1" />
+   <project path="prebuilts/python/darwin-x86/2.7.5" name="platform/prebuilts/python/darwin-x86/2.7.5" groups="darwin,pdk,pdk-cw-fs,pdk-fs" clone-depth="1" />
+   <project path="prebuilts/python/linux-x86/2.7.5" name="platform/prebuilts/python/linux-x86/2.7.5" groups="linux,pdk,pdk-cw-fs,pdk-fs" clone-depth="1" />
+-  <project path="prebuilts/qemu-kernel" name="platform/prebuilts/qemu-kernel" groups="pdk" clone-depth="1" />
++  <project remote="cadence-local" clone-depth="1" groups="pdk" name="androidnn-platform-prebuilts-qemu-kernel.git" path="prebuilts/qemu-kernel" revision="android-10-xrp-shared-bounce"/>
+   <project path="prebuilts/r8" name="platform/prebuilts/r8" groups="pdk" clone-depth="1" />
+   <project path="prebuilts/sdk" name="platform/prebuilts/sdk" groups="pdk" clone-depth="1" />
+   <project path="prebuilts/tools" name="platform/prebuilts/tools" groups="pdk,tools" clone-depth="1" />

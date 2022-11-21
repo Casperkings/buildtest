@@ -1,0 +1,123 @@
+# Makefile for TDK flow
+
+# These variables will be overridden by tc.
+#
+LLVM_XTENSA_PARAMS :=
+LLVM_TIE_LIBS :=
+CL_LIB := llvm-cl-tie-dll.so
+CG_LIB := llvm-cg-tie-dll.so
+LLVM_SOURCEDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+# (by default, assuming we are under $(XTTOOLS)/xtensa-elf/src/llvm)
+XTTOOLS := $(LLVM_SOURCEDIR)/../../..
+LLVM_INCLUDES  := -I .  -I $(XTTOOLS)/llvm/include -I $(LLVM_SOURCEDIR) -I $(LLVM_SOURCEDIR)/MCTargetDesc -I $(XTTOOLS)/include
+LLVM_CONFIGGEN := $(XTTOOLS)/llvm/bin/llvm-xtensa-config-gen
+LLVM_TABLEGEN  := $(XTTOOLS)/llvm/bin/llvm-tblgen
+CXX  := $(XTENSA_TOOLS)/bin/g++
+LDXX := $(CXX)
+
+# Handle the situation where we use a different compiler for building
+# the LLVM related components.
+ifeq (TRUE, TRUE)
+ifeq ($(filter %-mingw32, $(MAKE_HOST)),)
+override CXX = $(XTENSA_TOOLS)/tools.lnx86/cdsgcc/gcc/6.3/install/bin/g++
+else
+override CXX = $(XTENSA_TOOLS)/gcc-6.3/bin/g++
+endif
+override LDXX = $(CXX)
+endif
+
+# Compilation flags and source files, normally not overridden by tc.
+#
+CXX_FLAGS  := -O2 -fPIC -fvisibility-inlines-hidden -Werror=date-time -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wcast-qual -Wno-missing-field-initializers -pedantic -Wno-long-long -Wno-maybe-uninitialized -Wdelete-non-virtual-dtor -Wno-comment -ffunction-sections -fdata-sections
+CXX_FLAGS += -Wno-misleading-indentation
+LDXX_FLAGS := -shared -Wl,-O3 -Wl,--gc-sections
+TABLEGEN_FLAGS := $(LLVM_XTENSA_PARAMS) $(LLVM_INCLUDES) \
+		  $(LLVM_SOURCEDIR)/RISCV.td
+CL_SOURCES_1 := TensilicaCommon.cpp;RISCVTarget.cpp
+CL_SOURCES := $(subst ;, ,$(CL_SOURCES_1))
+CL_OBJECTS := $(CL_SOURCES:.cpp=.cpp.o)
+CG_SOURCES_1 := RISCVAsmPrinter.cpp;RISCVISelDAGToDAG.cpp;RISCVIntrinsicInfo.cpp;RISCVMCInstLower.cpp;RISCVTargetMachine.cpp;RISCVTargetTransformInfo.cpp;RISCVAsmBackend.cpp;RISCVAsmParser.cpp;RISCVConfigInfo.cpp;RISCVDisassembler.cpp;RISCVELFObjectWriter.cpp;RISCVELFStreamer.cpp;RISCVInstPrinter.cpp;RISCVMCAsmInfo.cpp;RISCVMCCodeEmitter.cpp;RISCVMCExpr.cpp;RISCVMCTargetDesc.cpp;RISCVTargetInfo.cpp;RISCVTargetStreamer.cpp
+CG_SOURCES := $(subst ;, ,$(CG_SOURCES_1))
+CG_OBJECTS := $(CG_SOURCES:.cpp=.cpp.o)
+CG_ASM_SOURCES_1 := RISCVRawDFA.S
+CG_ASM_SOURCES := $(subst ;, ,$(CG_ASM_SOURCES_1))
+CG_ASM_OBJECTS := $(CG_ASM_SOURCES:.S=.S.o)
+LLVM_LIBS_PATH_1 := $(XTTOOLS)/llvm/lib/libLLVMMC.so;$(XTTOOLS)/llvm/lib/libLLVMSupport.so;$(XTTOOLS)/llvm/lib/libLLVMAnalysis.so;$(XTTOOLS)/llvm/lib/libLLVMAsmPrinter.so;$(XTTOOLS)/llvm/lib/libLLVMCodeGen.so;$(XTTOOLS)/llvm/lib/libLLVMCore.so;$(XTTOOLS)/llvm/lib/libLLVMSelectionDAG.so;$(XTTOOLS)/llvm/lib/libLLVMTarget.so;$(XTTOOLS)/llvm/lib/libLLVMTransformUtils.so;$(XTTOOLS)/llvm/lib/libLLVMMCParser.so;$(XTTOOLS)/llvm/lib/libLLVMBitReader.so;$(XTTOOLS)/llvm/lib/libLLVMBitWriter.so;$(XTTOOLS)/llvm/lib/libLLVMInstrumentation.so;$(XTTOOLS)/llvm/lib/libLLVMInstCombine.so;$(XTTOOLS)/llvm/lib/libLLVMScalarOpts.so;$(XTTOOLS)/llvm/lib/libLLVMipo.so;$(XTTOOLS)/llvm/lib/libLLVMAsmParser.so;$(XTTOOLS)/llvm/lib/libLLVMMCDisassembler.so;$(XTTOOLS)/llvm/lib/libLLVMRISCVCodeGen.so
+LLVM_LIBS_PATH := $(subst ;, ,$(LLVM_LIBS_PATH_1))
+CLANG_LIBS_PATH_1 := $(XTTOOLS)/llvm/lib/libLLVMCore.so;$(XTTOOLS)/llvm/lib/libLLVMMC.so;$(XTTOOLS)/llvm/lib/libLLVMSupport.so;$(XTTOOLS)/llvm/lib/libclangBasic.so;$(XTTOOLS)/llvm/lib/libclangAST.so
+CLANG_LIBS_PATH := $(subst ;, ,$(CLANG_LIBS_PATH_1))
+CONFIGGEN_FILES_1 := TensilicaGenFeatures.inc TensilicaCustomTypes.td;TensilicaCustomCallingConvRet.td;TensilicaCustomCallingConvCall.td;TensilicaCustomIntrinsics.td;TensilicaCustomInstrPatterns.td;TensilicaGenSchedule.td;TensilicaCustomInstrTargetPropMap.td
+CONFIGGEN_FILES := $(subst ;, ,$(CONFIGGEN_FILES_1))
+TABLEGEN_FILES_1 := RISCVGenRegisterInfo.inc;RISCVGenInstrInfo.inc;RISCVGenAsmWriter.inc;RISCVGenDAGISel.inc;RISCVGenDFAPacketizer.inc;RISCVGenCallingConv.inc;RISCVGenSubtargetInfo.inc;RISCVGenIntrinsicEnums.inc;RISCVGenRegisterBank.inc;RISCVGenSystemOperands.inc;RISCVGenMCCodeEmitter.inc;RISCVGenMCPseudoLowering.inc;RISCVGenAsmMatcher.inc;RISCVGenDisassemblerTables.inc;RISCVGenCompressInstEmitter.inc;TensilicaGenIntrinsicImpl.inc;TensilicaGenCustomTypeInfo.inc
+TABLEGEN_FILES := $(subst ;, ,$(TABLEGEN_FILES_1))
+
+# Avoid unescaped ':' in path in the dependencies (e.g., on Windows).
+#
+DEP_CONFIGGEN = $(subst :,\:,$(LLVM_CONFIGGEN))
+DEP_TIE_LIBS = $(subst :,\:,$(LLVM_TIE_LIBS))
+DEP_SOURCEDIR = $(subst :,\:,$(LLVM_SOURCEDIR))
+DEP_CL_LIB = $(subst :,\:,$(CL_LIB))
+DEP_CG_LIB = $(subst :,\:,$(CG_LIB))
+DEP_CLANG_LIBS_PATH = $(subst :,\:,$(CLANG_LIBS_PATH))
+DEP_LLVM_LIBS_PATH = $(subst :,\:,$(LLVM_LIBS_PATH))
+
+CONFIGGEN_FILES: $(DEP_CONFIGGEN) $(DEP_TIE_LIBS)
+	$(LLVM_CONFIGGEN) $(LLVM_XTENSA_PARAMS)
+$(CONFIGGEN_FILES): CONFIGGEN_FILES
+$(TABLEGEN_FILES): $(DEP_TIE_LIBS)
+
+RISCVGenRegisterInfo.inc:            $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-register-info    $(TABLEGEN_FLAGS) -o $@
+RISCVGenRegisterBank.inc:            $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-register-bank    $(TABLEGEN_FLAGS) -o $@
+RISCVGenInstrInfo.inc:               $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-instr-info       $(TABLEGEN_FLAGS) -o $@
+RISCVGenAsmWriter.inc:	          $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-asm-writer       $(TABLEGEN_FLAGS) -o $@
+RISCVGenAsmMatcher.inc:	          $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-asm-matcher       $(TABLEGEN_FLAGS) -o $@
+RISCVGenDAGISel.inc:		  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-dag-isel         $(TABLEGEN_FLAGS) -o $@
+RISCVGenDFAPacketizer.inc:		  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-dfa-packetizer   $(TABLEGEN_FLAGS) -o $@
+RISCVGenDisassemblerTables.inc:	  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-disassembler     $(TABLEGEN_FLAGS) -o $@
+RISCVGenCallingConv.inc:		  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-callingconv      $(TABLEGEN_FLAGS) -o $@
+RISCVGenSubtargetInfo.inc:		  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-subtarget        $(TABLEGEN_FLAGS) -o $@
+RISCVGenMCCodeEmitter.inc:		  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-emitter          $(TABLEGEN_FLAGS) -o $@
+RISCVGenMCPseudoLowering.inc:	  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-pseudo-lowering  $(TABLEGEN_FLAGS) -o $@
+RISCVGenSystemOperands.inc:	  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-searchable-tables  $(TABLEGEN_FLAGS) -o $@
+RISCVGenCompressInstEmitter.inc:	  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-compress-inst-emitter  $(TABLEGEN_FLAGS) -o $@
+RISCVGenIntrinsicEnums.inc:	  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-tgt-intrinsic-enums  $(TABLEGEN_FLAGS) -o $@
+TensilicaGenIntrinsicImpl.inc:		  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-tgt-intrinsic-impl   $(TABLEGEN_FLAGS) -o $@
+TensilicaGenCustomTypeInfo.inc:		  $(CONFIGGEN_FILES)
+	$(LLVM_TABLEGEN) -gen-custom-type-info $(TABLEGEN_FLAGS) -o $@
+
+%.cpp.o: $(DEP_SOURCEDIR)/%.cpp $(TABLEGEN_FILES)
+	$(CXX) $(CXX_FLAGS) $(LLVM_INCLUDES) -c -o $@  $<
+
+%.S.o: $(DEP_SOURCEDIR)/%.S $(CONFIGGEN_FILES)
+	$(CXX) $(CXX_FLAGS) $(LLVM_INCLUDES) -c -o $@  $<
+
+$(DEP_CL_LIB): $(CL_OBJECTS) $(DEP_CLANG_LIBS_PATH)
+	$(LDXX) $(CXX_FLAGS) $(LDXX_FLAGS) $(CL_OBJECTS) \
+	$(CLANG_LIBS_PATH) -o $@
+
+$(DEP_CG_LIB): $(CG_OBJECTS) $(CG_ASM_OBJECTS) $(DEP_LLVM_LIBS_PATH)
+	$(LDXX) $(CXX_FLAGS) $(LDXX_FLAGS) $(CG_OBJECTS) $(CG_ASM_OBJECTS) \
+	$(LLVM_LIBS_PATH) -o $@
+
+all: $(DEP_CL_LIB) $(DEP_CG_LIB)
+
+clean:
+	rm $(CL_LIB) $(CG_LIB) $(CG_OBJECTS) $(CG_ASM_OBJECTS) $(CL_OBJECTS) \
+	   $(TABLEGEN_FILES) $(CONFIGGEN_FILES)
+

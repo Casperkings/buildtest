@@ -1,0 +1,180 @@
+<!-- systypes.xsysi  -  Xtensa system types
+     
+     Copyright (c) 2008-2021 Tensilica Inc.  ALL RIGHTS RESERVED.
+     These coded instructions, statements, and computer programs are the
+     copyrighted works and confidential proprietary information of Tensilica Inc.
+     They may not be modified, copied, reproduced, distributed, or disclosed to
+     third parties in any manner, medium, or form, in whole or in part, without
+     the prior written consent of Tensilica Inc.
+     
+     WARNING: This file was automatically generated.  Do not edit!
+  -->
+
+<sysdoc>
+  <!-- This XML sequence is in 'Stash' format - see Xtensa/share/Stash.pm -->
+
+<types b="hash" t="typedef_hash">
+ <CoreInstance b="hash" range="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+  <type b="array" value="hash"/>
+  <entries b="hash">
+   <name b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="string"/>
+   </name>
+   <config b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="string"/>
+   </config>
+   <traxbytes b="hash" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+    <range b="array" value="0,512..262144"/>
+   </traxbytes>
+   <vecselect b="hash" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="i32"/>
+    <range b="array" value="0..1"/>
+   </vecselect>
+  </entries>
+ </CoreInstance>
+ <PartMemory b="hash" range="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+  <type b="array" value="hash"/>
+  <entries b="hash">
+   <size b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </size>
+   <paddr b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </paddr>
+   <writable b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </writable>
+   <device b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </device>
+   <target b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="string"/>
+   </target>
+   <offset b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </offset>
+  </entries>
+ </PartMemory>
+ <PartEntry b="hash" range="*" default="*" subtypes="*" sizerange="*" objmodel="2">
+  <type b="array" value="hash"/>
+  <entries b="hash">
+   <corename b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="string"/>
+   </corename>
+   <memname b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="string"/>
+   </memname>
+   <size b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </size>
+   <offset b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </offset>
+  </entries>
+ </PartEntry>
+ <MultiCoreSystem b="hash" range="*" default="*" subtypes="*" sizerange="*" objmodel="2">
+  <type b="array" value="hash"/>
+  <entries b="hash">
+   <name b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="string"/>
+   </name>
+   <cores b="hash" range="*" entries="*" default="*" objmodel="*">
+    <type b="array" value="array"/>
+    <subtypes b="array" value="CoreInstance"/>
+    <sizerange b="array" value="1..16"/>
+   </cores>
+   <extint b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="i32"/>
+   </extint>
+   <sysbuid b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </sysbuid>
+   <busiface b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="string"/>
+   </busiface>
+   <compatCustomer b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </compatCustomer>
+   <buildHW b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </buildHW>
+   <memories b="hash" range="*" entries="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+    <default b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+     <type b="array" value="PartMemory"/>
+    </default>
+   </memories>
+   <partitions b="hash" range="*" entries="*" default="*" sizerange="*" objmodel="*">
+    <type b="array" value="array"/>
+    <subtypes b="array" value="PartEntry"/>
+   </partitions>
+  </entries>
+ </MultiCoreSystem>
+ <ExpandedXtbench b="hash" range="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+  <type b="array" value="Xtbench"/>
+  <entries b="hash">
+   <xtensa_root b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="string"/>
+   </xtensa_root>
+   <pconfig b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+   </pconfig>
+  </entries>
+ </ExpandedXtbench>
+ <ExpandedCoreInstance b="hash" range="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+  <type b="array" value="CoreInstance"/>
+  <entries b="hash">
+   <index b="hash" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="i32"/>
+    <range b="array" value="0..15"/>
+   </index>
+   <sys b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="Xtbench"/>
+   </sys>
+   <linkmap b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+   </linkmap>
+   <swconfig b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+   </swconfig>
+   <pconfig b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+   </pconfig>
+   <shared_reset_table_vaddr b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </shared_reset_table_vaddr>
+   <shared_reset_table_entry_vaddr b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </shared_reset_table_entry_vaddr>
+   <layout_actions b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="array"/>
+   </layout_actions>
+  </entries>
+ </ExpandedCoreInstance>
+ <ExpandedMultiCoreSystem b="hash" range="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+  <type b="array" value="MultiCoreSystem"/>
+  <entries b="hash">
+   <corenames b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+   </corenames>
+   <confignames b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+   </confignames>
+   <cc b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+   </cc>
+   <layout b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="hash"/>
+   </layout>
+   <cores_sh b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="array"/>
+   </cores_sh>
+   <syscfgid b="hash" range="*" entries="*" default="*" subtypes="*" sizerange="*" objmodel="*">
+    <type b="array" value="u32"/>
+   </syscfgid>
+  </entries>
+ </ExpandedMultiCoreSystem>
+</types>
+
+</sysdoc>

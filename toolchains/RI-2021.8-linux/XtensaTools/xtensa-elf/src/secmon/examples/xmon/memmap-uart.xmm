@@ -1,0 +1,6 @@
+
+BEGIN uart
+0x20000000: sysapb : uart : 0x1000 : writable, uncached;
+ uart0 : C : 0x20000000 - 0x20000fff : .uart.data
+END uart
+

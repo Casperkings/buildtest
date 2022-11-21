@@ -1,0 +1,74 @@
+include ${TOP_DIR}/Makefile.common
+include ${TOP_DIR}/Makefile.xtensa_xos_host.platform
+
+# XTSC include files for the device subsystem; the host is simulated on x86
+XTSC=xtsc-run.xtensa_host
+
+C_COMPILER=$(XTENSA_SYSTEM)/../bin/xt-clang
+ifeq (,$(wildcard $(C_COMPILER)))
+  # Fall back to xt-clang from PATH
+  C_COMPILER=xt-clang
+endif
+
+# If not specified, assume same cache attributes for host as device
+ifeq ($(HOST_CACHE_ATTR),)
+  HOST_CACHE_ATTR=$(CACHE_ATTR)
+endif
+
+# Link flags used to compile the host application on xtensa xtos host. 
+# Includes the host OpenCL runtime and host XRP
+HOST_LDFLAGS = \
+  -std=c++11 \
+	-Wl,--defsym,_memmap_cacheattr_reset=${HOST_CACHE_ATTR} \
+  -L$(XTENSA_OCL_RT)/host/lib \
+  -lxocl-host-rt-xtensa-xos -lxdyn-lib-host-xtensa-xos \
+  -lxrp-xtensa-host-xos -lxos -lfdt \
+  $(XTENSA_OCL_RT)/host/lib/xrp.xtensa_host.dts.o \
+  -mlsp=$(XTENSA_OCL_RT)/Subsystem/$(SUBSYSTEM)/LSP_xtensa_host/Host/xtensa-elf/lib/sim
+
+ifneq ($(XTENSA_PARAMS),)
+  XTSC_CORE_XTENSA_PARAMS = --define=DSP_0_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_1_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_2_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_3_XTENSA_PARAMS=\$(XTENSA_PARAMS)
+else
+  XTSC_CORE_XTENSA_PARAMS =
+endif
+
+# Always assumes this for host CPP files
+CXXFLAGS+=-std=c++11
+
+COMMA= ,
+EMPTY=
+SPACE= $(EMPTY) $(EMPTY)
+HOST_COMPILE_OPTIONS=--xtensa-core=${XTENSA_HOST_CORE}
+HOST_CMD_ARGS_S=$(subst $(SPACE),$(COMMA),$(HOST_CMD_ARGS))
+
+XTSC_RUN_BINARY_DEF = --define=Host_BINARY=$(HOST_EXE) \
+                      --define=Host_BINARY_ARGS=$(HOST_CMD_ARGS_S) \
+                      $(addprefix --define=,$(join \
+                        $(addsuffix _BINARY=,$(CORES)), $(DEVICE_EXES)))
+
+ifeq ($(PROFILE),)
+  XTSC_PARAMS = $(XTSC_CORE_XTENSA_PARAMS) \
+                $(XTSC_RUN_BINARY_DEF) --include=$(XTSC_INC_FILE) \
+                --set_xtsc_parm=lua_script_files=$(XTENSA_OCL_RT)/Subsystem/$(SUBSYSTEM)/$(XTSC)/sim_cntrl.lua
+else
+  XTSC_PARAMS = --define=DSP_0_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_1_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_2_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_3_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=Host_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                $(XTSC_CORE_XTENSA_PARAMS) \
+                $(XTSC_RUN_BINARY_DEF) --include=$(XTSC_INC_FILE) \
+                --set_xtsc_parm=lua_script_files=$(XTENSA_OCL_RT)/Subsystem/$(SUBSYSTEM)/$(XTSC)/sim_cntrl.lua
+endif
+
+# Simulate turbo-mode
+xtsc-run-turbo: $(HOST_EXE) $(DEVICE_EXES)
+	$(XTSC_RUN) --set_xtsc_parm=turbo=true \
+              --set_xtsc_parm=turbo_max_relaxed_cycles=10000000 $(XTSC_PARAMS)
+
+# Cycle accurate mode
+xtsc-run: $(HOST_EXE) $(DEVICE_EXES)
+	$(XTSC_RUN) --set_xtsc_parm=turbo=false $(XTSC_PARAMS)

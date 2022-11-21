@@ -1,0 +1,176 @@
+---
+SubSystemName: SubSystem
+
+Metadata: 
+  Version: 2
+
+Processors:
+  - Name              : CORE0
+    Config            : XRC_Vision_Q7_2P
+    Pipeline          : NX
+    ProcId            : 0
+    Master            : true
+    StaticVectorSel   : 0
+    DataRamFetchWidth : 64b
+    MasterDataWidth   : 16b
+    MasterInstWidth   : 16b
+    SlaveDataInstMerged: true
+    SlaveWidth         : 16b
+    IDMA              : {Shared: false, Width: 16b}
+    APBMaster         : true
+    Dcache            :
+      LineSize        : 64
+    DataRam0:
+      {LocalAddr: 0x3ffc0000, GlobalAddr: 0x10000000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0x3ffe0000, GlobalAddr: 0x10020000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    Dcache:
+      LineSize: 64
+
+  - Name              : CORE1
+    Config            : XRC_Vision_Q7_2P
+    Pipeline          : NX
+    ProcId            : 1
+    StaticVectorSel   : 0
+    DataRamFetchWidth : 64b
+    MasterDataWidth   : 16b
+    MasterInstWidth   : 16b
+    SlaveDataInstMerged: true
+    SlaveWidth         : 16b
+    IDMA              : {Shared: false, Width: 16b}
+    APBMaster         : true
+    Dcache            :
+      LineSize        : 64
+    DataRam0:
+      {LocalAddr: 0x3ffc0000, GlobalAddr: 0x10040000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0x3ffe0000, GlobalAddr: 0x10060000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    Dcache:
+      LineSize: 64
+
+L2:
+  - Name: L2
+    Size : 1Mb
+    RAMGlobalAddr: 0x55600000
+    ControlRegAddr: 0x55500000
+    DataWidth: 16b
+    InstWidth: 16b
+    MasterWidth: 16b
+    SlaveWidth: 16b
+    RamOnly: true
+    NumSlavePorts: 2
+    NumCorePorts: 2
+    NumExclusives: 2
+    CacheLineSize: 64
+
+SubSystemExternalInterfaces:
+  - {NumPorts: 2,
+     Procs: [CORE0, CORE1],
+     ROB: {NumEntries: 64}
+    }
+
+SubSystemMMIO:
+  - Name: SubSystemMMIO
+    APB: true
+    InterruptRegisters:
+    # Inter-core interrupts (IPI). (See Fig. 17 of Xtsubsystem MAS)
+    # IPI set 0
+      - {GlobalAddr  : 0xd00fc000,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 17, Proc: CORE0, xipcNotify: true},
+           {BitOffset: 1, BInterrupt: 17, Proc: CORE1, xipcNotify: true},
+         ]}
+      - {GlobalAddr  : 0xd00fc004,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 18, Proc: CORE0},
+           {BitOffset: 1, BInterrupt: 18, Proc: CORE1},
+         ]}
+    # IPI set 1
+      - {GlobalAddr  : 0xd00fc100,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 19, Proc: CORE0},
+           {BitOffset: 1, BInterrupt: 19, Proc: CORE1},
+         ]}
+      - {GlobalAddr  : 0xd00fc104,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 20, Proc: CORE0},
+           {BitOffset: 1, BInterrupt: 20, Proc: CORE1},
+         ]}
+    # IPI set 2
+      - {GlobalAddr  : 0xd00fc200,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 21, Proc: CORE0},
+           {BitOffset: 1, BInterrupt: 21, Proc: CORE1},
+         ]}
+      - {GlobalAddr  : 0xd00fc204,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 22, Proc: CORE0},
+           {BitOffset: 1, BInterrupt: 22, Proc: CORE1},
+         ]}
+    # IPI set 3
+      - {GlobalAddr  : 0xd00fc300,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 23, Proc: CORE0},
+           {BitOffset: 1, BInterrupt: 23, Proc: CORE1},
+         ]}
+      - {GlobalAddr  : 0xd00fc304,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 24, Proc: CORE0},
+           {BitOffset: 1, BInterrupt: 24, Proc: CORE1},
+         ]}
+    Controls:
+      # See Section 7 of the Xtsubsystem MAS
+      # RunOnReset - CORE1..COREN-1 starts on reset
+      - {GlobalAddr: 0xd00ff020, Width: 2, InitValue: 0,
+         ControlMap : [
+           {Name: RunOnReset, BitOffsetStart: 1, BitOffsetEnd: 1, Proc: CORE1},
+         ]}
+      # StatVectorSel
+      - {GlobalAddr: 0xd00ff024, Width: 2,
+         ControlMap : [
+           {Name: StatVectorSel, BitOffsetStart: 1, BitOffsetEnd: 1, Proc: CORE1},
+         ]}
+      - {GlobalAddr: 0xd00ff108, Width: 32,
+         ControlMap: [
+           {Name: PWaitMode, BitOffsetStart: 0, BitOffsetEnd: 0, Proc: CORE0, 
+            Dir: in},
+           {Name: PWaitMode, BitOffsetStart: 1, BitOffsetEnd: 1, Proc: CORE1, 
+            Dir: in},
+           {Name: l2_pwait, BitOffsetStart: 16, BitOffsetEnd: 16, L2: L2, 
+            Dir: in},
+         ]}
+      # NumOfCores
+      - {GlobalAddr: 0xd00ff10c, Width: 32, InitValue: 2, ReadOnly: 1,
+         ControlMap : [
+           {Name: NumOfCores, BitOffsetStart: 0, BitOffsetEnd: 31}
+         ]}
+
+SystemRAM:
+  {Size: 512Mb, GlobalAddr: 0x60000000}
+
+SystemROM:
+  {Size: 16Mb, GlobalAddr: 0x50000000}
+
+DeviceMemories:
+  - {Name: Shared_RAM_L,
+     Size: 256Mb,
+     GlobalAddr: 0x90000000,
+     ReadDelay: 1,
+     ReadRepeat: 1,
+     WriteDelay: 1,
+     WriteRepeat: 1,
+     HostShared: true,
+     HostName: SharedRAM_L,
+     RequestFIFODepth : 255}
+  - {Name: __DefaultMem__}
+
+SubSystemInterconnect:
+  - {Src: CommonBus,   Dests: [CORE0, CORE1]}
+  - {Src: CORE0, Dests: [L2]}
+  - {Src: CORE1, Dests: [L2]}
+
+SubSystemSoftware:
+  XIPCSharedDataBuffer: xmp_xipc_shared_data_buffer
+  XRPDeviceTreeSpec: {
+     XRPSharedMem: Shared_RAM_L
+  }

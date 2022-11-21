@@ -1,0 +1,45 @@
+#  Source Makefile for MP Boot
+#
+#  This makefile is never invoked directly (which is why it's named
+#  Makefile.src rather than Makefile).  It is always included by a
+#  small generated Makefile in the corresponding build subdirectory.
+#  This generated Makefile includes a generated Makefile.info
+#  and sets SRC_SUBDIR before including this Makefile.src.
+#
+# Copyright (c) 2001-2008 by Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+include $(XTENSA_TOOLS_ROOT)/src/system/mbuild-defs.mk
+include $(XTENSA_SYSTEM_ROOT)/sys-defs.mk
+
+INST_INC_DIR = $(XTENSA_SYSTEM_ROOT)/xtensa-elf/include/xtensa
+CORE_INC_DIR = $(XTENSA_SYSTEM_ROOT)/cores/$(core)/xtensa-elf/include/xtensa
+CORE_LIB_DIR = $(XTENSA_SYSTEM_ROOT)/cores/$(core)/xtensa-elf/lib
+
+export XTENSA_TOOLS_ROOT 
+export XTENSA_SYSTEM_ROOT
+export SRCDIR
+
+#######  Rules start here  #######
+
+#  Default target:
+all: $(CORES)
+
+
+.PHONY:
+
+$(CORES):
+	-$(call mkpath, $@)
+	$(MAKE) -f $(SRCDIR)/Makefile.src.percore -C $@ XTENSA_SYSTEM=$(XTENSA_SYSTEM) CORE=$@
+
+clean:
+	-$(call rm_r, $(CORES))
+
+
+include $(XTENSA_TOOLS_ROOT)/misc/rules.mk
+

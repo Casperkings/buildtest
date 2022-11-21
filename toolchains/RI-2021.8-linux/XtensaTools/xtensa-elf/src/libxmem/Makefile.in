@@ -1,0 +1,170 @@
+# Copyright (c) 2003-2015 Cadence Design Systems, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+
+# Makefile for libxmem.
+
+default:
+
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+VPATH = $(srcdir)
+prefix = @prefix@
+target_alias = @target_alias@
+target_libdir = $(prefix)/$(target_alias)/lib
+target_incdir = $(prefix)/$(target_alias)/arch/include/xtensa/
+
+top_builddir = @abs_top_builddir@
+top_srcdir = @top_srcdir@
+
+
+include $(top_builddir)/../../Makefile.env
+
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+
+TPP = $(TENSILICA_TOOLS)/bin/tpp
+
+CC_FOR_TARGET = $(XTTOOLS)/bin/$(XTENSA_CC_FOR_TARGET)
+AR_FOR_TARGET = $(XTTOOLS)/bin/xt-ar
+AR_FLAGS = rc
+
+CFLAGS = -O2 -g -mno-serialize-volatile -Wall -Werror -DM -mlongcalls -MD
+DEBUG_CFLAGS = -O0 -g -Wall -Werror -DM -mlongcalls -MD
+
+ifeq ($(XTENSA_CC_FOR_TARGET),xt-clang)
+  CFLAGS += -fno-jump-tables
+endif
+
+INCLUDE = 
+
+XMEM_C_FILES = \
+	xmem_stack.c \
+	xmem_heap.c
+
+XMEM_BANK_C_FILES = \
+	xmem_bank.c \
+	xmem_l2ram.c \
+	xlmem.c
+
+XMEM_OBJS = $(XMEM_C_FILES:.c=.o) 
+XMEM_BANK_OBJS = $(XMEM_BANK_C_FILES:.c=.o) 
+
+XMEM_DEBUG_OBJS = $(XMEM_C_FILES:.c=.debug.o)
+XMEM_BANK_DEBUG_OBJS = $(XMEM_BANK_C_FILES:.c=.debug.o)
+
+XMEM_XTOS_OBJS = $(XMEM_C_FILES:.c=.xtos.o) 
+XMEM_BANK_XTOS_OBJS = $(XMEM_BANK_C_FILES:.c=.xtos.o) 
+
+XMEM_XOS_OBJS = $(XMEM_C_FILES:.c=.xos.o) 
+XMEM_BANK_XOS_OBJS = $(XMEM_BANK_C_FILES:.c=.xos.o) 
+
+COMPILE_COMMAND = $(CC_FOR_TARGET) $(CFLAGS) $(INCLUDE) -c
+
+%.o : %.c
+	$(COMPILE_COMMAND) $(CFLAGS) -o $@ $<
+
+%.xtos.o : %.c
+	$(COMPILE_COMMAND) $(CFLAGS) -DXMEM_XTOS -o $@ $<
+
+%.xos.o : %.c
+	$(COMPILE_COMMAND) $(CFLAGS) -DXMEM_XOS -o $@ $<
+
+%.debug.o : %.c
+	$(COMPILE_COMMAND) $(DEBUG_CFLAGS) -DXMEM_DEBUG -DXMEM_VERIFY -o $@ $<
+
+.PHONY: default all all-target install install-target clean
+
+LIB_XMEM = libxmem.a
+LIB_XMEM_BANK = libxmem-bank.a
+
+LIB_XMEM_XTOS = libxmem-xtos.a
+LIB_XMEM_BANK_XTOS = libxmem-bank-xtos.a
+
+LIB_XMEM_XOS = libxmem-xos.a
+LIB_XMEM_BANK_XOS = libxmem-bank-xos.a
+
+LIB_XMEM_DEBUG = libxmem-debug.a
+LIB_XMEM_BANK_DEBUG = libxmem-bank-debug.a
+
+$(LIB_XMEM) : $(XMEM_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XMEM_BANK) : $(XMEM_BANK_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XMEM_XTOS) : $(XMEM_XTOS_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XMEM_BANK_XTOS) : $(XMEM_BANK_XTOS_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XMEM_XOS) : $(XMEM_XOS_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XMEM_BANK_XOS) : $(XMEM_BANK_XOS_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XMEM_DEBUG) : $(XMEM_DEBUG_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XMEM_BANK_DEBUG) : $(XMEM_BANK_DEBUG_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+all: all-target
+
+targets: $(LIB_XMEM) $(LIB_XMEM_BANK) $(LIB_XMEM_DEBUG) $(LIB_XMEM_BANK_DEBUG) \
+         $(LIB_XMEM_XTOS) $(LIB_XMEM_BANK_XTOS)  \
+         $(LIB_XMEM_XOS) $(LIB_XMEM_BANK_XOS)
+
+all-target: targets
+
+install: install-targets
+
+install-target: install-targets
+
+install-targets: $(LIB_XMEM) $(LIB_XMEM_BANK) \
+                 $(LIB_XMEM_XTOS) $(LIB_XMEM_BANK_XTOS) \
+                 $(LIB_XMEM_XOS) $(LIB_XMEM_BANK_XOS) \
+                 $(LIB_XMEM_DEBUG) $(LIB_XMEM_BANK_DEBUG)
+	$(INSTALL) $(LIB_XMEM) $(target_libdir)
+	$(INSTALL) $(LIB_XMEM_BANK) $(target_libdir)
+	$(INSTALL) $(LIB_XMEM_XTOS) $(target_libdir)
+	$(INSTALL) $(LIB_XMEM_BANK_XTOS) $(target_libdir)
+	$(INSTALL) $(LIB_XMEM_XOS) $(target_libdir)
+	$(INSTALL) $(LIB_XMEM_BANK_XOS) $(target_libdir)
+	$(INSTALL) $(LIB_XMEM_DEBUG) $(target_libdir)
+	$(INSTALL) $(LIB_XMEM_BANK_DEBUG) $(target_libdir)
+
+clean:
+	rm -f *.o *.a *.d $(LIB_XMEM) $(LIB_XMEM_BANK) \
+                    $(LIB_XMEM_XTOS) $(LIB_XMEM_BANK_XTOS) \
+                    $(LIB_XMEM_XOS) $(LIB_XMEM_BANK_XOS) \
+                    $(LIB_XMEM_DEBUG) $(LIB_XMEM_BANK_DEBUG)
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) && $(SHELL) ./config.status
+
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && $(SHELL) ./config.status --recheck
+

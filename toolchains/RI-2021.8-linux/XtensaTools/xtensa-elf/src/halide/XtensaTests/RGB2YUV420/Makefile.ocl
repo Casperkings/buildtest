@@ -1,0 +1,17 @@
+TOP_DIR=$(XTENSA_OCL_TESTS_DIR)
+
+HOST_SRC_CPP_FILES = test.cpp ${TOP_DIR}/Native/RGB2YUV_ref/cvtcolor_rgb2yuv_ref.cpp
+DEVICE_SRC_CL_FILES =  rgb2yuv420.cl
+
+DEVICE_OPTFLAGS = -mllvm -tensilica-misaligned-ldst-opt -mllvm -mao-allow-byte-idx-group=true
+
+LDFLAGS=$(BIN)/host/rgb2yuv420.a -L$(XTENSA_OCL_RT)/host/lib -lxocl-host-rt-sim-shared -Wl,-rpath=$(XTENSA_OCL_RT)/host/lib
+
+ifeq (${TARGET}, xtensa)
+  include ../Makefile.xtensa-host
+else
+  include ../Makefile.x86_64-host
+endif
+
+clean::
+	rm -rf *gmon* OutputY_ref.yuv OutputV_ref.yuv OutputU_ref.yuv OutputY.yuv OutputU.yuv OutputV.yuv Input.yuv

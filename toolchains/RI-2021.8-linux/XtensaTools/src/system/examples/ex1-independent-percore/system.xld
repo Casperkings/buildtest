@@ -1,0 +1,9 @@
+---
+#  3 identical cores, default names are core0, core1, core2
+- { construct: core, num_cores: 3, config: ProtoTemp_wide_BE }
+#  Share common address space; system memories are automatically created there:
+- { construct: space, name: cc, description: 'common space', sizem1: 0xFFFFFFFF }
+- { construct: map, space: core0.external, addressable: cc }
+- { construct: map, space: core1.external, addressable: cc }
+- { construct: map, space: core2.external, addressable: cc }
+

@@ -1,0 +1,111 @@
+include ${TOP_DIR}/Makefile.common
+include ${TOP_DIR}/Makefile.xtensa_host.platform
+
+# XTSC include files for the xtensa host + device subsystem;
+XTSC=xtsc-run.xtensa_linux_host
+DSP_0_DEVICE_COMM_BASE_MAGIC = 0x20161006
+DSP_1_DEVICE_COMM_BASE_MAGIC = 0x20161006
+DSP_2_DEVICE_COMM_BASE_MAGIC = 0x20161006
+DSP_3_DEVICE_COMM_BASE_MAGIC = 0x20161006
+C_COMPILER = ${XTENSA_LINUX_BUILDROOT}/output/host/usr/bin/xtensa-linux-gcc
+
+# Location of the Xtensa linux kernel and filesystem
+XTENSA_LINUX_IMAGE=$(XTENSA_LINUX_BUILDROOT)/output/images/Image.elf
+XTENSA_LINUX_ROOTFS=$(XTENSA_LINUX_BUILDROOT)/output/images/rootfs.ext2
+E2CP=$(XTENSA_LINUX_BUILDROOT)/output/host/usr/bin/e2cp
+
+ifeq ("$(wildcard $(XTENSA_LINUX_IMAGE))", "")
+  $(error Xtensa linux kernel image $(XTENSA_LINUX_IMAGE) does not exist)
+endif
+
+ifeq ("$(wildcard $(XTENSA_LINUX_ROOTFS))", "")
+  $(error Xtensa linux rootfs $(XTENSA_LINUX_ROOTFS) does not exist)
+endif
+
+ifeq ("$(wildcard $(E2CP))", "")
+  $(error Tool $(E2CP) does not exist)
+endif
+
+.PHONY: setup
+
+HOST_COMPILE_COMMON_FLAGS += -pthread
+
+# Link flags used to compile the host application on xtensa linux. Includes the
+# host OpenCL runtime and host XRP
+HOST_LDFLAGS = \
+  -L$(XTENSA_OCL_RT)/host/lib \
+  -lxocl-host-rt-native -lxdyn-lib-host-native -lxrp-linux-native \
+  -pthread -luuid
+
+XTSC_RUN_BINARY_DEF = $(addprefix --define=,$(join \
+                        $(addsuffix _BINARY=,$(CORES)), ))
+
+ifneq ($(XTENSA_PARAMS),)
+  XTSC_CORE_XTENSA_PARAMS = --define=DSP_0_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_1_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_2_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_3_XTENSA_PARAMS=\$(XTENSA_PARAMS)
+else
+  XTSC_CORE_XTENSA_PARAMS =
+endif
+
+ifeq ($(XT_OCL_DYN_LIB), 1)
+  COPY_DEVICE_LIB = 1
+else
+  COPY_DEVICE_LIB = 0
+endif
+
+ifeq ($(PROFILE),)
+  XTSC_PARAMS = --define=Host_BINARY=Image.elf \
+                --define=Host_BINARY_ARGS= \
+                $(XTSC_RUN_BINARY_DEF) \
+                $(XTSC_CORE_XTENSA_PARAMS) \
+                --include=$(XTSC_INC_FILE) \
+                --set_xtsc_parm=lua_script_files=$(XTENSA_OCL_RT)/Subsystem/$(SUBSYSTEM)/$(XTSC)/sim_cntrl.lua
+else
+  XTSC_PARAMS = --define=DSP_0_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_1_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_2_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_3_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=Host_BINARY=Image.elf \
+                --define=Host_BINARY_ARGS= \
+                $(XTSC_RUN_BINARY_DEF) \
+                $(XTSC_CORE_XTENSA_PARAMS) \
+                --include=$(XTSC_INC_FILE) \
+                --set_xtsc_parm=lua_script_files=$(XTENSA_OCL_RT)/Subsystem/$(SUBSYSTEM)/$(XTSC)/sim_cntrl.lua
+endif
+
+# Copy to host's root filesystem
+setup: $(HOST_EXE) $(DEVICE_EXES) $(DEVICE_SRC_CL_FILES) $(INPUT_FILES)
+	cp $(XTENSA_LINUX_ROOTFS) .
+	cp $(XTENSA_LINUX_IMAGE) .
+	# Copy the host application to the hosts's root filesystem
+	$(E2CP) -O 0 -G 0 -P 755 $(HOST_EXE) rootfs.ext2:/root/$(HOST_EXE)
+	# Copy the device firmware to the hosts's filesystem
+	for T in $(CORE_NUMS) ; do \
+		$(E2CP) -O 0 -G 0 DSP_$$T.exe rootfs.ext2:/lib/firmware/xrp$$T.elf; \
+	done
+	# Copy the kernel source CL files to the hosts's root filesystem
+	for T in $(DEVICE_SRC_CL_FILES) ; do \
+		$(E2CP) -O 0 -G 0 $$T rootfs.ext2:/root/; \
+	done
+	# Copy the input files to the hosts's root filesystem
+	for T in $(INPUT_FILES) ; do \
+		$(E2CP) -O 0 -G 0 $$T rootfs.ext2:/root/; \
+	done
+	# Copy the dynamic library
+	if [ $(COPY_DEVICE_LIB) -eq 1 ]; \
+  then \
+    $(E2CP) -O 0 -G 0 device.pkg.lib rootfs.ext2:/root/; \
+  fi
+
+# Simulate turbo-mode
+xtsc-run-turbo: $(HOST_EXE) $(DEVICE_EXES) setup
+	$(XTSC_RUN) --set_xtsc_parm=turbo=true $(XTSC_PARAMS)
+
+# Simulate cycle-accurate mode
+xtsc-run: $(HOST_EXE) $(DEVICE_EXES) setup
+	$(XTSC_RUN) --set_xtsc_parm=turbo=false $(XTSC_PARAMS)
+
+clean::
+	rm -rf Image.elf rootfs.ext2

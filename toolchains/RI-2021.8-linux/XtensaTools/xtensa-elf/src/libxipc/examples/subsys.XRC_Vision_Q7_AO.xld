@@ -1,0 +1,67 @@
+---
+- { construct: core, name: DSP_0,
+    config: XRC_Vision_Q7_AO,
+    vecselect: 0,
+  }
+- { construct: core, name: DSP_1,
+    config: XRC_Vision_Q7_AO,
+    vecselect: 0,
+  }
+- { construct: core, name: DSP_2,
+    config: XRC_Vision_Q7_AO,
+    vecselect: 0,
+  }
+- { construct: segment,
+    addrspace: xipc_shared_buffer,
+    memory: xipc_shared_buffer,
+    startaddr: 0, endaddr: 16383,
+    partition: { shared: 100% },
+  }
+- { construct: segment,
+    addrspace: sysram_uncached,
+    memory: sysram_uncached,
+    startaddr: 0, endaddr: 16383,
+    partition: { shared: 100% },
+  }
+- { construct: space, name: cc, description: 'common cache coherency controller (CC)',
+    sizem1: 4294967295,
+    attrs: { delay: 2 },
+  }
+- { construct: map,
+    space: DSP_0.external, addressable: cc,
+    startaddr: 0,
+  }
+- { construct: map,
+    space: DSP_1.external, addressable: cc,
+    startaddr: 0,
+  }
+- { construct: map,
+    space: DSP_2.external, addressable: cc,
+    startaddr: 0,
+  }
+- { construct: memory, name: sysram,
+    space: cc,
+    startaddr: 0x60000000, size: 0x1fff8000,
+    attrs: { device: 0, writable: 1 },
+  }
+- { construct: memory, name: sysram_uncached,
+    space: cc,
+    startaddr: 0x7fffc000, size: 0x4000,
+    attrs: { device: 0, writable: 1 },
+  }
+- { construct: memory, name: sysrom,
+    space: cc,
+    startaddr: 0x50000000, size: 0x1000000,
+    attrs: { device: 0, writable: 0 },
+  }
+- { construct: memory, name: xipc_shared_buffer,
+    space: cc,
+    startaddr: 0x7fff8000, size: 0x4000,
+    attrs: { device: 0, writable: 1 },
+  }
+- { construct: options,
+    system_name: Test,
+    postxmap: ~,
+    create_local_memories: 1,
+    prexmap: ~,
+  }

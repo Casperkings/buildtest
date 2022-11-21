@@ -1,0 +1,94 @@
+# Copyright (c) 2000-2021 Cadence Design Systems, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+# Makefile.src -- for secure bootloader / monitor in <xtensa_tools_root>/xtensa-elf/src/secmon
+
+
+ifndef XTENSA_TOOLS_ROOT
+$(error Please set XTENSA_TOOLS_ROOT to the path to Xtensa Tools)
+endif
+#  NOTE:  For now, we assume $(XTENSA_TOOLS_ROOT)/bin is on the PATH.
+ifndef XTENSA_ROOT
+$(error Please set XTENSA_ROOT to the path to your specific Xtensa core package)
+endif
+ifndef INSTLIBDIR
+$(error Please set INSTLIBDIR to the path where libraries and objects are installed)
+#INSTLIBDIR = $(call fixpath,$(XTENSA_ROOT)/xtensa-elf/arch/lib)
+endif
+
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+include $(XTENSA_ROOT)/misc/build.mk
+
+ifndef SRCDIR
+$(error Please set MAKEFILE_SRC to the path to secmon Makefile.src)
+endif
+
+CONFIGDIR	= $(shell xt-clang --show-config=config)
+
+# Override hosteenv.mk
+export RM	= rm -f
+export RM_R	= rm -rf
+export CP	= cp -fp
+export GREP	= grep
+export MKPATH	= mkdir -p
+export S	= /
+export PERL	= perl -w
+
+XSTR		= $(shell grep XCHAL_HAVE_SECURE $(CONFIGDIR)/src/config/core.h)
+SECMON		= $(word 3, $(XSTR))
+
+XTOSSRCDIR	= $(SRCDIR)/../xtos
+SMONSRCDIR	= $(SRCDIR)/src
+
+SM_BINDIR	= $(abspath bin)
+SM_INCDIR	= $(abspath include)
+
+SM_TARGETS	= libsm-sim.a libsm-board.a libsm-sim-unpack.a libsm-board-unpack.a _vectors-sm.o
+NSM_TARGETS	= libsec.a
+ALL_TARGETS	= $(SM_TARGETS) $(NSM_TARGETS)
+TARGETS		= $(addprefix $(SM_BINDIR)/,$(ALL_TARGETS))
+
+ifeq ($(SECMON),1)
+
+all:
+	$(MAKE) -C $(SMONSRCDIR) -f Makefile.inc BINDIR=$(SM_BINDIR) INCDIR=$(SM_INCDIR) XTOSSRCDIR=$(XTOSSRCDIR)
+	@echo "Built secmon"
+
+install:
+	-$(MKPATH) $(INSTLIBDIR)
+	cp -f $(TARGETS) $(INSTLIBDIR)
+
+clean:
+	rm -rf $(SM_BINDIR) $(SM_INCDIR)
+
+else
+
+all:
+	@echo "Secmon unavailable"
+
+install:
+
+clean:
+
+endif
+
+.PHONY : all install clean
+

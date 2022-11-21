@@ -1,0 +1,183 @@
+#  Makefile.mbuild  --  top-level Makefile for system (or multi-core) builds
+#  (used by mbuild.pl)
+#
+# Copyright (c) 2001-2008 by Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+#
+#  NOTE:  This Makefile is generally not invoked directly by a user
+#	typing 'make', but rather by xt-mbuild (wrapper for mbuild.pl)
+#	which sets up the proper definitions for driving this Makefile.
+#
+#  FIXME: THIS UNUSED ALTERNATE DESCRIPTION/USE NEEDS UPDATING:
+#  This Makefile is typically invoked from some other directory as follows:
+#
+#	a)	Create Makefile.info that defines the following:
+#			XTENSA_SYSTEM_ROOT
+#			...
+#			(see mbuild.pl)
+#
+#	b)	cd <xtensa_system_build>
+#		cat > Makefile
+#		  include .../Makefile.info
+#		  include $(XTENSA_TOOLS_ROOT)/src/Makefile.mbuild (this file)
+#		[EOF]
+#		<xtensa_tools_root>/Tools/bin/make [populate|all|clean]*
+#
+#  where:
+#
+#	<xtensa_tools_root> is the path to the Xtensa Tools
+#
+#	<xtensa_system_root> is the path to the system package to create/install
+#
+#	<xtensa_system_build> is the path to the tree where the system package
+#		is built; defaults to the current directory;
+#		must be different than, but can be under, <xtensa_system_root>
+#
+#	<targets> is some combination of:
+#		populate	just create <xtensa_system_build> tree with Makefiles
+#		all		build and install everything
+#		install		(unused)
+#		clean		remove <xtensa_system_build> tree
+#	and the default target is 'all'.
+
+
+#  This fancy way of including defs.mk is unnecessary, but allows invoking
+#  this makefile without having included Makefile.info (??):
+#
+#  Get path to this makefile (<xtensa_tools_root>/FIXME/Makefile.mbuild).
+#  This assignment must be made before including any other makefile:
+MAKEFILE_SRC := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
+#  Include generic definitions (gives us XTENSA_TOOLS_ROOT etc):
+include $(word 1,$(XTENSA_TOOLS_ROOT) $(dir $(MAKEFILE_SRC))../../..)/misc/defs.mk
+
+#  For this top-level Makefile.mbuild, subdirectories are relative
+#  to ... FIXME is this default?:
+#SRCDIR = $(XTENSA_TOOLS_ROOT)/src/system
+
+ifndef XTENSA_SYSTEM_BUILD
+ XTENSA_SYSTEM_BUILD := $(PWD)
+endif
+
+#  Get definitions useful for system builds:
+include $(XTENSA_TOOLS_ROOT)/src/system/mbuild-defs.mk
+include $(XTENSA_SYSTEM_ROOT)/sys-defs.mk
+
+
+SUBDIRS =	xtensa-elf/system \
+		system
+
+SUBDIRS_all = xtensa-elf/system system
+MAKEFILE_SRC_xtensa-elf/system = $(XTENSA_TOOLS_ROOT)/xtensa-elf/src/system/Makefile.src
+MAKEFILE_SRC_system = $(XTENSA_TOOLS_ROOT)/src/system/Makefile.src
+
+CONFIG_PARAMS = $(CONFIGS:%=$(XTENSA_SYSTEM_ROOT)/config/%-params)
+CORE_PARAMS   =   $(CORES:%=$(XTENSA_SYSTEM_ROOT)/config/%-params)
+
+#######  Rules start here  #######
+
+.PHONY: sw hw ccbuild prepopulate
+
+#  Default target:
+#  (The 'all' target also has subdir dependencies defined in rules.mk below.
+#   Note also that targets all,populate,install,clean defined here usually
+#   run before recursing through SUBDIRS.)
+#
+all: populate
+
+sw: all swtest
+hw: populate
+#hw: populate ccbuild
+
+populate: prepopulate
+	-$(call mkpath, $(XTENSA_SYSTEM_ROOT)/config)
+
+prepopulate: $(SOCFILE) $(XTENSA_SYSTEM_ROOT)/sys-defs.mk $(CONFIG_PARAMS) $(CORE_PARAMS)
+	-$(call mkpath, $(XTENSA_SYSTEM_BUILD))
+
+#  Install params files for core configs in the system:
+vpath %-params
+vpath %-params $(subst ;, ,$(XTENSA_SYSTEM_ORIG))
+$(CONFIG_PARAMS): $(XTENSA_SYSTEM_ROOT)/config/%: %
+	$(call cp, $<, $@)
+
+#  Install params files for core instances in the system:
+#  TODO: instead of just copying, also adjust these params file parameters:
+#	StaticVectorSelect (per the system config)
+#	sysroot (path to ... ??)
+#	ProcessorID ??
+#	ConfigName ??
+#	maybe SW_ABI ??
+#	maybe IsaUseExtL32R ??  (which refers to sw not hw)
+$(CORE_PARAMS): $(XTENSA_SYSTEM_ROOT)/config/%-params: $(CONFIGS:%=%-params)
+	$(call cp, $(filter %$(CORE_$*_CONFIG)-params,$^), $@)
+
+$(XTENSA_SYSTEM_ROOT)/sys-defs.mk: $(XTENSA_TOOLS_ROOT)/src/system/sys-defs.mk.tpp $(SOCFILE)
+	-$(call mkpath, $(@D))
+	$C  Invoke tpp to generate Makefile snippet that contains various system info:
+	$(SYSTPP) -x $(SOCFILE) -I $(XTENSA_TOOLS_ROOT)/lib/perl -o $@ $<
+
+#$(TPPFILES): %: $(TPPSRCDIR)/%.tpp $(CONFIG_PARAMS) $(CORE_PARAMS)
+#	$(SYSTPP) -x $(SOCFILE) \
+#		-I $(XTENSA_TOOLS_ROOT)/lib/perl \
+#		-e 'our $$xtensa_system = "$(XTENSA_SYSTEM)";' \
+#		-o $@ $(TPPSRCDIR)/$*.tpp
+
+
+$(SOCFILE): $(SAVED_SOCFILE)
+	$C  Process and expand system description XML file:
+	$(XTENSA_TOOLS_ROOT)/libexec/xt-syslinkmap -x $(SAVED_SOCFILE) -o $@ \
+		-registry '$(subst \,/,$(XTENSA_SYSTEM_ORIG))' \
+		-syshw $(XTENSA_SYSTEM_ROOT)/syshw.yml \
+		-xmap $(XTENSA_SYSTEM_ROOT)/system.xmap \
+		-logfile $(XTENSA_SYSTEM_BUILD)/mbuild.log
+#$(SOCFILE): system.xparm.tpp $(SAVED_SOCFILE)
+#	$C  Process and expand system description XML file:
+#	$(SYSTPP) -x $(SAVED_SOCFILE) -I $(XTENSA_TOOLS_ROOT)/lib/perl \
+#		-e 'our $$xtensa_system = "$(subst \,/,$(XTENSA_SYSTEM_ORIG))";' \
+#		-e 'our $$xtensa_system_root = "$(subst \,/,$(XTENSA_SYSTEM_ROOT))";' \
+#		-o $@ $<
+$(SAVED_SOCFILE): $(SRC_SOCFILE)
+	$C  Install copy of system description XLD file:
+	-$(call mkpath, $(@D))
+#  Convert to XLD format if it's not already:
+ifeq ($(filter %.xld,$(SRC_SOCFILE)),$(SRC_SOCFILE))
+	$(call cp, $^, $@)
+else
+	$(XTENSA_TOOLS_ROOT)/libexec/xt-mbuild-convert -x $^ -o $@
+endif
+
+#  Software tests:
+swtest: subdirs-all
+	$(MAKE) $(SUBMAKEFLAGS) -C xtensa-elf/system/test test
+
+clean:
+	-$(call rm, $(SOCFILE), $(XTENSA_SYSTEM_ROOT)/sys-defs.mk)
+
+#HWTOOLS = $(XTENSA_TOOLS_ROOT)/xcl/hwtools
+#HWBUILD = $(XTENSA_SYSTEM_ROOT)/Hardware
+#ccbuild: $(SOCFILE)
+#	@echo '******************   Running ccbuild'
+#	-$(RM_R) $(HWBUILD)
+#	#-$(MKPATH) $(HWBUILD)	# fixme: need to mkpath parent dirs of HWBUILD if defined as deep path
+#	#$(PERL) -I $(HWTOOLS)/perllib -I $(XTENSA_TOOLS_ROOT)/xcl/lib $(HWTOOLS)/scripts/construct -srcroot $(HWTOOLS) -bldroot $(XTENSA_SYSTEM_BUILD) -prefix $(HWBUILD) -perldb $(XPLODE_DIR) -socfile $(SOCFILE) -swtools $(XTENSA_TOOLS_ROOT) -tctools $(XTENSA_TIE_TOOLS)
+#	#
+#	# cd ...  (e.g. ~/work/bbo)
+#	$(XTENSA_STANDARD_TOOLS)/ccbuild/ccbuild --name foo --dir ./sys-x86-linux/foo \
+#	--ipi 3 --extint <n> --cfgid <...> --fpga avnetlx200 \
+#	--tctools $(XTENSA_TIE_TOOLS) --ybuildir ./builds-x86-linux/<someconfig> --nodiags --noeda \
+#	./builds-x86-linux/<config> \
+#	./builds-x86-linux/<config> \
+#	...list all instance configs...
+#
+#	cd ./sys-x86-linux/foo/fpga/syn
+#	./MakeFPGA.pl
+#	#  (and answer the questions; I've used synplicity, not sure whether it matters)
+
+
+include $(XTENSA_TOOLS_ROOT)/misc/rules.mk
+
+

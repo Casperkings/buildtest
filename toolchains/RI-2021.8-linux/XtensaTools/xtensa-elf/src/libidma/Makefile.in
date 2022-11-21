@@ -1,0 +1,206 @@
+# Makefile for libidma.
+
+# Copyright (c) 2003-2020 Cadence Design Systems.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Cadence Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Cadence Inc.
+
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+VPATH = $(srcdir)
+prefix = @prefix@
+target_alias = @target_alias@
+target_libdir = $(prefix)/$(target_alias)/lib
+target_incdir = $(prefix)/$(target_alias)/arch/include/xtensa/
+
+top_builddir = @abs_top_builddir@
+top_srcdir = @top_srcdir@
+
+default: all
+include $(top_builddir)/../../Makefile.env
+
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+
+#----------------------------------------------------------------------
+# Detect whether config has IDMA. Used to define build targets.
+#----------------------------------------------------------------------
+XSTR1     = $(shell grep XCHAL_HAVE_IDMA `xt-clang --show-config=config`/src/config/core.h)
+HAVE_IDMA = $(word 3, $(XSTR1))
+
+#----------------------------------------------------------------------
+# Detect C library. Compile to C11 standard if we have XCLIB.
+#----------------------------------------------------------------------
+XSTR2 = $(shell grep SW_CLibrary `xt-clang --show-config=config`/config/default-params)
+CLIB  = $(word 3, $(XSTR2))
+
+#----------------------------------------------------------------------
+# NOTE: IDMA_FUSA indicates if we are targeting a certified build.
+# It will be set to "true" if a certified build is required.
+#----------------------------------------------------------------------
+XSTR3     = $(shell grep XCHAL_HAVE_FUNC_SAFETY `xt-clang --show-config=config`/src/config/core.h)
+IDMA_FUSA = $(word 3, $(XSTR3))
+
+
+ifeq ($(CLIB), xclib)
+CSTD  = -std=c11
+else
+CSTD  = -std=c99
+endif
+
+CC_FOR_TARGET = $(XTENSA_CC_FOR_TARGET)
+AR_FOR_TARGET = xt-ar
+
+CFLAGS_WARN   = -Werror -Wall -Wextra -Wunused -Wundef -Wstrict-prototypes -Wpointer-arith \
+		-Wcast-qual -Wformat-security -Wmissing-prototypes -Wshadow -Wsign-compare -pedantic
+
+#----------------------------------------------------------------------
+# Extra warning flags for use with xt-clang.
+#----------------------------------------------------------------------
+
+MWFLAGS       = -Wshadow-all -Wunreachable-code-aggressive -Wduplicate-enum \
+		-Wcompare-distinct-pointer-types -Warray-bounds-pointer-arithmetic -Wvla
+
+
+ifeq ($(CC_FOR_TARGET),xt-xcc)
+CFLAGS_COMMON = -clang $(CSTD) -g $(CFLAGS_WARN) -mlongcalls -mno-l32r-flix -ffunction-sections -DIDMA_LIB_BUILD
+else
+CFLAGS_COMMON = $(CSTD) -g $(CFLAGS_WARN) $(MWFLAGS) -mlongcalls -mno-l32r-flix -ffunction-sections -DIDMA_LIB_BUILD
+endif
+
+CFLAGS       = $(CFLAGS_COMMON) -O2
+CFLAGS_DEBUG = $(CFLAGS_COMMON) -O0 -DIDMA_DEBUG
+
+
+CFILES =       \
+  idma.c       \
+  idma_legacy.c
+
+ADDTL_FILES = \
+  data.c      \
+  idma_logbuf.c \
+  non_certified/idma_print.c
+
+CFILES_XTOS = \
+  idma_xtos.c
+
+CFILES_XTRA   = \
+  idma_os.c
+
+EXAMPLES = 							\
+  $(srcdir)/examples/test_*.c					\
+  $(srcdir)/examples/idma_tests.h
+
+OBJS       = $(CFILES:.c=.o) $(CFILES_XTRA:.c=.o) $(ADDTL_FILES:.c=.o)
+DEBUG_OBJS = $(CFILES:.c=.debug.o) $(CFILES_XTRA:.c=.o) $(ADDTL_FILES:.c=.debug.o)
+
+XTOS_OBJS       = $(CFILES:.c=.xtos.o) $(CFILES_XTOS:.c=.o)  $(ADDTL_FILES:.c=.o)
+DEBUG_XTOS_OBJS = $(CFILES:.c=.xtos.debug.o) $(CFILES_XTOS:.c=.o) $(ADDTL_FILES:.c=.debug.o)
+
+OS_OBJS         = $(CFILES:.c=.o) $(ADDTL_FILES:.c=.o)
+DEBUG_OS_OBJS   = $(CFILES:.c=.debug.o) $(ADDTL_FILES:.c=.debug.o)
+
+UM_OBJS         = $(CFILES:.c=.um.o) $(ADDTL_FILES:.c=.um.o)
+DEBUG_UM_OBJS   = $(CFILES:.c=.um.debug.o) $(ADDTL_FILES:.c=.um.debug.o)
+
+.PHONY: default all all-target install install-target clean
+
+%.o : %.c
+	$(CC_FOR_TARGET) $(INCLUDES) $(CFLAGS) -c -o $@ $<
+
+%.xtos.o : %.c
+	$(CC_FOR_TARGET) -DIDMA_USE_XTOS $(INCLUDES) $(CFLAGS) -c -o $@ $<
+
+%.debug.o : %.c
+	$(CC_FOR_TARGET) $(INCLUDES) $(CFLAGS_DEBUG) -c -o $@ $<
+
+%.xtos.debug.o : %.c
+	$(CC_FOR_TARGET) -DIDMA_USE_XTOS $(INCLUDES) $(CFLAGS_DEBUG) -c -o $@ $<
+
+%.um.o : %.c
+	$(CC_FOR_TARGET) -DIDMA_USERMODE -DIDMA_USE_XTOS $(CFLAGS) -c -o $@ $<
+
+%.um.debug.o : %.c
+	$(CC_FOR_TARGET) -DIDMA_USERMODE -DIDMA_USE_XTOS $(CFLAGS_DEBUG) -c -o $@ $<
+
+
+LIB           = libidma.a
+DEBUG_LIB     = libidma-debug.a
+
+XTOSLIB       = libidma-xtos.a
+DEBUG_XTOSLIB = libidma-debug-xtos.a
+
+OSLIB         = libidma-os.a
+DEBUG_OSLIB   = libidma-debug-os.a
+
+UMLIB         = libidma-um.a
+DEBUG_UMLIB   = libidma-debug-um.a
+
+
+$(LIB) : $(OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(XTOSLIB) : $(XTOS_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(DEBUG_LIB) : $(DEBUG_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(DEBUG_XTOSLIB) : $(DEBUG_XTOS_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(OSLIB) : $(OS_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(DEBUG_OSLIB) : $(DEBUG_OS_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(UMLIB) : $(UM_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(DEBUG_UMLIB) : $(DEBUG_UM_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+
+# Build libs only if config has IDMA.
+
+ifneq ($(HAVE_IDMA),1)
+TARGETS = 
+else
+TARGETS = \
+	$(LIB) $(DEBUG_LIB) \
+	$(XTOSLIB) $(DEBUG_XTOSLIB) \
+	$(OSLIB) $(DEBUG_OSLIB) \
+	$(UMLIB) $(DEBUG_UMLIB)
+endif
+
+
+mkdirs:
+	mkdir -p non_certified
+
+all-target: mkdirs $(TARGETS)
+
+all: all-target
+install: install-target
+
+ifneq ($(TARGETS), )
+install-target: $(TARGETS)
+	$(INSTALL) $(TARGETS) $(target_libdir)
+else
+install-target:
+	echo iDMA Hardware not available
+endif
+
+clean:
+	rm -f *.o  *.a
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) && $(SHELL) ./config.status
+
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && $(SHELL) ./config.status --recheck
+

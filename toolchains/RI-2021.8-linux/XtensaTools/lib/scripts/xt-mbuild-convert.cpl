@@ -1,0 +1,306 @@
+# xt-mbuild-convert.pl
+# +----------------------------------------------------------------+
+# |   Copyright (c) 2017-2018 Tensilica Inc.  ALL RIGHTS RESERVED. |
+# |                                                                |
+# |   These coded instructions, statements, and computer programs  |
+# |   are the copyrighted works and confidential proprietary       |
+# |   information of Tensilica Inc.  They may not be modified,     |
+# |   copied, reproduced, distributed, or disclosed to third       |
+# |   parties in any manner, medium, or form, in whole or in part, |
+# |   without the prior written consent of Tensilica Inc.          |
+# +----------------------------------------------------------------+
+#
+# $Id: //depot/rel/Homewood/ib.8/Xtensa/Software/misc/xt-mbuild-convert.pl#1 $
+
+use strict;
+use Carp;
+use Carp::Heavy;
+use File::Path;
+use Getopt::Long;
+
+my $xtensa_tools_root;
+BEGIN {
+    #  XTENSA_TOOLS_ROOT is set by the perl wrapper.
+    $xtensa_tools_root = $ENV{'XTENSA_TOOLS_ROOT'};
+}
+
+use lib "${xtensa_tools_root}/lib/perl";
+use Object;
+use Stash;
+use Xtensa::Params;
+use Xtensa::AddressLayout;
+
+#  For debugging:
+#  Re-implement Carp's eval display to include line numbers, so error lines can be reasonably located:
+#
+{
+    package Carp;
+    our $MaxEvalLen;
+    BEGIN { undef &get_subname; }		# avoid warning about redefined get_subname()
+    sub get_subname {
+	my $info = shift;
+	if (defined($info->{evaltext})) {
+	    my $eval = $info->{evaltext};
+	    if ($info->{is_require}) {
+		return "require $eval";
+	    } else {
+		$eval =~ s/([\\\'])/\\$1/g;
+		my @lines = split("\n", $eval);
+		$eval = join("\n", map(($_+1).": ".$lines[$_], 0 .. $#lines));
+		return "eval '" . str_len_trim($eval, $MaxEvalLen) . "'";
+	    }
+	}
+	return ($info->{sub} eq '(eval)') ? 'eval {...}' : $info->{sub};	#'
+    }
+}
+
+my $argv0 = $ENV{'ARGV0'};	# set by the perl wrapper
+$argv0 = $0 unless defined($argv0);
+my $myname = $argv0;
+$myname =~ s|.*[/\\]||;
+#my $tools = $ENV{'XTENSA_STANDARD_TOOLS'};
+
+
+#---------------------------------------------------------------------------
+#			 --- Parse Options ---
+#---------------------------------------------------------------------------
+
+my $help;
+my $xconfig;
+my $outputfile;
+my $mbuild_debug = 0;
+my $skipcc = 0;
+my $logfile;
+my $xtensa_system;
+
+GetOptions(
+	"help"       => \$help,
+	"x=s"        => \$xconfig,
+	"o=s"        => \$outputfile,
+	"debug!"     => \$mbuild_debug,
+	"skipcc!"    => \$skipcc,
+	"logfile=s"  => \$logfile,
+	"registry=s" => \$xtensa_system,
+	);
+
+#---------------------------------------------------------------------------
+#		       --- Print Help Message ---
+#---------------------------------------------------------------------------
+if (defined $help or !defined($xconfig) or !defined($outputfile)) {
+    print <<END_OF_MESSAGE;
+
+    Usage: $myname [options]
+
+    Convert old style XML xt-mbuild system description to new style XLD format.
+
+    Option summary:
+
+        -help           Print this message
+        -debug          Display extra output for internal debugging
+        -skipcc         Skip generating a CC connecting all core external busses
+                         (note: necessary for no-PIF core configurations)
+        -x file         (required) Name of XML configuration file to use, as
+                         given to original xt-mbuild; extension is usually .xsys
+        -o file         (required) Resulting XLD script file to output;
+                         expected extension is .xld
+        -logfile file   Log all output to <file>
+END_OF_MESSAGE
+    exit;
+}
+
+if (@ARGV) {
+    print "Error: unknown argument @ARGV\n";
+    print "Use -help option for usage information.\n";
+    exit 1;
+}
+
+#
+#  First create a log file for debugging:
+#
+my $extralog;
+if (defined($logfile)) {
+    open($extralog, ">$logfile") or die "ERROR opening $logfile for write: $@";
+}
+
+
+#############################################################################
+
+sub readfile {
+    my ($filename) = @_;
+    my $file;
+    open(IN,"<$filename") or die "could not open '$filename' for reading: $!";
+    defined(sysread(IN,$file,-s IN)) or die "could not read '$filename': $!";
+    close(IN);
+    return $file;
+}
+
+sub writefile {
+    my ($filename, $data) = @_;
+    open(OUT,">$filename") or die "Could not open '$filename' for writing: $!";
+    print OUT $data;
+    close(OUT) or die "Could not close '$filename' after writing: $!";
+}
+
+
+#  Read the config file
+#
+my $socxml = readfile($xconfig);
+my $typefile = $xtensa_tools_root.'/src/system/systypes.xsysi';
+my $types = readfile($typefile);
+my $sysdict = stash_dict_new('system types');
+stash_xml_read($sysdict, $types, $typefile, 'sysdoc');
+my $dict = stash_dict_new('system');
+stash_dict_import($dict, $sysdict);
+my @sysobjs = stash_xml_read($dict, $socxml, $xconfig, 'sysdoc');
+# FIXME: should we look for specific top-level system name instead?:
+@sysobjs == 1
+  or die "expected exactly one top-level object in $xconfig, found ".scalar(@sysobjs);
+my ($sys) = @sysobjs;
+# FIXME: check that $sys is valid?
+
+
+#######   Check / get system info   #######
+my @constructs;
+my $systemkey;
+
+
+stash_obj_isa($dict, $sys, "MultiCoreSystem") or die "system must be of type MultiCoreSystem";
+#   Figure out top-level name of system object
+($systemkey) = grep($_ ne "types" && $_ ne "modulemap", keys %{$dict->{roots}});
+##   Subclass the system (to add derived information)   #######
+my $oldsys = $sys;	# save old one (just in case?)
+Stash::stash_create_hash_package_byname($dict, "ExpandedMultiCoreSystem");
+$sys = dup_to ExpandedMultiCoreSystem $oldsys;
+$dict->{roots}{$systemkey} = $sys;	# update dictionary
+#  Paranoia:
+stash_obj_isa($dict, $sys, "ExpandedMultiCoreSystem") or die "derived system must be of type ExpandedMultiCoreSystem";
+
+#
+#######   Expand system info   #######
+#
+
+
+my $cores = $sys->cores;
+@$cores >= 1 or die "Need at least one core";
+foreach my $core (@$cores) {
+    push @constructs, {
+	      construct => "core",
+	      name => $core->name,
+	      config => $core->config,
+	      vecselect => $core->vecselect,
+	};
+}
+
+if (exists($sys->{"skip_cc"})) {
+    $skipcc = $sys->skip_cc;
+}
+
+my $partitions = $sys->partitions;
+foreach my $part (@$partitions) {
+    my $corename = $part->corename;
+    $corename = "shared" if !defined($part->corename);
+    push @constructs, {
+	       construct => "segment",
+	       partition => { $corename => $part->size },
+	       memory => $part->memname,
+	       addrspace => $part->memname,
+	       startaddr => $part->offset,
+	       endaddr => $part->offset + $part->size - 1,
+       };
+}
+
+# push @constructs, {
+#	construct => "linkmap",
+#	name => "shared",
+#	cores => join(",", map($_->name, @$cores)),
+#	};
+
+#######   Process system memory map
+#
+# determine if we should skip generating and connecting the coherency controller
+
+if (!$skipcc) {
+    #  Create CC (coherency controller's outgoing memory space):
+    push @constructs, {
+		construct => 'space',
+		name => 'cc',
+		description => 'common cache coherency controller (CC)',
+		sizem1 => 0xFFFFFFFF,
+		attrs => { delay => 2 },
+	};
+
+    #  Connect each core's external bus (PIF/AXI/etc) to the CC:
+    foreach my $core (@$cores) {
+	#  Connect to CC:
+	 push @constructs, {
+		construct => 'map',
+		space => $core->name . ".external",
+		startaddr => 0,
+		addressable => 'cc',
+		};
+    }
+}
+
+#  Connect system memories to the CC:
+$sys->set_memories({}) unless defined($sys->memories);
+foreach my $memname (keys %{$sys->memories}) {
+    my $pmem = $sys->memories->{$memname};
+    my $writable = ($pmem->writable || 0);
+    my $device = ($pmem->device || 0);
+    print $extralog ">>>>>  pmem '$memname' size=",$pmem->size," (",$pmem->size+0,") paddr=",$pmem->paddr," (",$pmem->paddr+0,") writable=${writable} device=${device}.\n" if defined($extralog);
+    my $attrs = {};
+    my $offset = 0;
+    my $mem;
+    my $target = $pmem->target;
+    if (defined($target)) {
+	print STDERR "Adding memory '$memname' => target '$target'\n";
+	print $extralog "Adding memory '$memname' => target '$target'\n" if defined($extralog);
+	$offset = ($pmem->offset || 0);
+	$attrs->{device} = 1 if $device;
+	$attrs->{writable} = 0 if ! $writable;
+	$target =~ /\.inbound$/
+	    or print STDERR "WARNING: system memory '$memname': memory/device/port '$target' is not an inbound PIF port (which are named CORENAME.inbound)";
+	push @constructs, {
+		    construct => 'map',
+		    description => "system memory $memname mapping to $target",
+		    space => 'cc',
+		    startaddr => $pmem->paddr,
+		    addressable => $target,
+		    offset => $offset,
+		    size => $pmem->size,
+		    attrs => { device => $device, writable => $writable },
+		    } unless $skipcc;
+    } else {
+	print STDERR "Creating memory '$memname'\n";
+	print $extralog "Creating memory '$memname'\n" if defined($extralog);
+	defined($pmem->offset) and die "new memory '$memname': unexpected offset parameter";
+	push @constructs, {
+		    construct => 'memory',
+		    name => $memname,
+		    size => $pmem->size,
+		    attrs => { device => $device, writable => $writable },
+		    $skipcc ? () : (space => 'cc', startaddr => $pmem->paddr),
+		    };
+    }
+} # system memories to CC
+
+
+push @constructs, {
+	construct => 'options',
+	prexmap => $sys->{"prexmap"},	# not supported
+	postxmap => $sys->{"postxmap"},	# not supported
+	system_name => $sys->name,
+	create_local_memories => 1,
+	};
+
+writefile($outputfile,
+	  Xtensa::AddressLayout::format_xld(\@constructs));
+
+
+#  And close the debug log file:
+if (defined($extralog)) {
+    close($extralog) or die "ERROR closing $logfile: $@";
+}
+
+exit 0;
+

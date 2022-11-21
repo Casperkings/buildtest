@@ -1,0 +1,45 @@
+# Copyright (c) 2012-2013 Tensilica Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The trax software library is meant to be used in order to give the user the 
+ability to control and access TRAX so that a tensilica core can set triggers 
+and read the data
+
+The library contains the API to deal with TRAX. It is similar to the API 
+offered by xt-traxcmd. But in this case, we read and write registers 
+directly using wer and rer instructions.
+
+The files are:
+
+trax.c		: This file contains the basic implementation of the 
+		  library commands with their helper functions
+trax.h		: A header file that contains the API calls that can 
+		  be made by the user
+trax-proto.c	: This contains the low level protocol implementation
+		  of reading and writing memory and registers. The
+		  end user need not be concerned with these details
+trax-util.c	: This file contains utility functions that can be used for 
+		  polling TRAX or executing higher level save functionality. 
+		  It assumes that print subroutines and file I/O routines are
+		  available on the system allocating spaces for saving the 
+		  trace, etc.
+Makefile.in	: The makefile for the build process
+		  xmake all install shall build the library

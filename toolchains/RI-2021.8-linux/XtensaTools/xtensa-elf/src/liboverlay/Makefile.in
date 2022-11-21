@@ -1,0 +1,100 @@
+# Makefile for liboverlay.a
+
+# Copyright (c) 2013 Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+VPATH = $(srcdir)
+prefix = @prefix@
+target_alias = @target_alias@
+target_libdir = $(prefix)/$(target_alias)/lib
+
+top_builddir = @abs_top_builddir@
+top_srcdir = @top_srcdir@
+
+default: all
+include $(top_builddir)/../../Makefile.env
+
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+
+# NOTE: overlay.h and overlay_os_asm.h are in ../include, which gets installed
+# in the Xtensa Tools xtensa-elf/include/xtensa directory.
+
+TPP = $(TENSILICA_TOOLS)/bin/tpp
+
+CFLAGS = -O2 -g -mlongcalls -mno-l32r-flix -Wall
+
+CC_FOR_TARGET = $(XTTOOLS)/bin/$(XTENSA_CC_FOR_TARGET)
+AR_FOR_TARGET = $(XTTOOLS)/bin/xt-ar
+AR_FLAGS = rc
+
+call_stubs_%.o : call_stubs.S
+	$(CC_FOR_TARGET) $(CFLAGS) -c -o $@ $< -DOV_ID=$*
+
+.c.o :
+	$(CC_FOR_TARGET) $(CFLAGS) -c -o $@ $^
+
+.S.o :
+	$(CC_FOR_TARGET) $(CFLAGS) -c -o $@ $^
+
+######################################################################
+### Change this to suit the max number of overlays you want to support
+######################################################################
+NUM_OVERLAYS = 8
+
+# Generate a list of overlay numbers 0 ... N-1
+
+CNT = $(shell echo "$(NUM_OVERLAYS) - 1" | bc)
+OVERLAY_IDS = $(shell seq 0 $(CNT))
+
+# Construct the stub names
+
+CS_OBJS = $(addsuffix .o,$(addprefix call_stubs_,$(OVERLAY_IDS)))
+
+OTHER_OBJS =	\
+	overlay_manager.o	\
+	overlay_override.o	\
+	overlay_asm.o		\
+	overlay_os_hook.o	\
+	overlay_os_asm.o	\
+	overlay_os_asm_1.o
+
+# Call stubs not generated at library build time anymore.
+#LIB_OVERLAY_OBJS = $(CS_OBJS) $(OTHER_OBJS)
+LIB_OVERLAY_OBJS = $(OTHER_OBJS)
+
+LIB_OVERLAY = liboverlay.a
+
+$(LIB_OVERLAY) : $(LIB_OVERLAY_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+.PHONY: default all all-target install install-target clean
+
+all: $(LIB_OVERLAY)
+
+all-target: all
+
+install: all
+	$(INSTALL) $(LIB_OVERLAY) $(target_libdir)
+
+install-target: install
+
+clean:
+	rm -f *.o *.d $(LIB_OVERLAY)
+
+###########################################################################
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) && $(SHELL) ./config.status
+
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && $(SHELL) ./config.status --recheck
+

@@ -1,0 +1,5 @@
+CC  = gcc
+CXX = g++
+
+include ../Makefile.common
+include ${TOP_DIR}/Makefile.x86_64-host.common

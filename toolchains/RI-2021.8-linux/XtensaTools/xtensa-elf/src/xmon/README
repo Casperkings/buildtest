@@ -1,0 +1,246 @@
+# Copyright (c) 1999-2013 Tensilica Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+XMON -- Xtensa debug MONitor
+---------------------------
+
+XMON is a GDB debug monitor stub for Xtensa architecture processors.
+It is delivered as a library, which can be included into the user application.
+Essentially, XMON implements the Debug Exception Vector to handle debug exceptions. 
+
+Communication with GDB is done using user-provided routines (see USER PROVIDED 
+ROUTINES below).
+
+To invoke XMON on GDB request, that is to interrupt the target, the main 
+application needs to implement the interrupt handler for the device used to 
+communicate with the GDB (e.g. UART) and the main task of this interrupt handler 
+is to invoke XMON by simply executing a breakpoint.
+
+XMON handles common GDB protocol requests such as reading and writing memory and
+registers, single-stepping, running, stopping (with Ctrl-C if a device interrupt
+is available), breakpoints, etc.
+
+Using XMON as a stand-alone, debug monitor involves linking the XMON library 
+into a simple debug monitor application -- possibly as simple as a main() that
+just loops on a programmed breakpoint.  Such a separate monitor must, of course, 
+use separate RAM (and possibly vectors) than the running application.
+Dealing with this is outside the scope of this document.)
+
+
+USER PROVIDED ROUTINES
+----------------------
+
+The following routines are used by XMON, and are expected to be
+provided by the user, e.g. for a UART or other character stream
+interface used to communicate with GDB.  The file xmon-main-serial.c
+provides an example implementation that works with Tensilica
+supported FPGA boards (using a UART port).
+
+   uint8_t  _xmon_in();             // wait for character from GDB
+   void     _xmon_out(len, str);    // output a string to GDB
+   int      _xmon_flush();          // flush output characters
+
+
+XMON PROVIDED ROUTINES
+----------------------
+
+The following routines are provided by XMON, and are expected to be used 
+by the user, e.g. to initialize XMON or to close it. See xmon.h for more 
+details on these functions.
+
+   /* Initialize and enable XMON */
+   int _xmon_init(char* gdbBuf, int gdbBufSize, xmon_logger_t logger);
+
+XMON communication with GDB is done using a buffer allocated by the main 
+application. This allows for buffer deallocation when XMON is no longer 
+in use and also, allows application/OS specific allocation of the memory 
+space.
+
+   /*Detach from XMON */
+   void _xmon_close(void);
+
+Along with this function, main application can also deallocate the 
+buffer allocated prior to calling _xmon_init().
+
+
+INITIALIZATION
+--------------
+
+Main application calls _xmon_init() when it's ready to use XMON.
+This  provides XMON with the buffer it can use to communicate with 
+GDB and also it tells XMON that the communication link with GDB is 
+established. If XMON is entered due to a debug exception before 
+xmon_init() is called, the debug exception is ignored and XMON returns. 
+If such a situation occurs, XMON will try to clear possible break cause, 
+ensuring it doesn't happen again. For example, XMON entry due to IBREAK, 
+DBREAK or ICOUNT can be resolved by clearing appropriate registers and 
+continuing. XMON entry due to a debug interrupt is simply ignored. 
+XMON entry due to any software breakpoint will result in XMON skipping 
+the breakpoint and resuming.
+
+
+INVOKING XMON
+-------------
+
+After initialization, all debug exceptions put XMON under GDB control.
+That is, XMON receives commands from GDB until GDB detaches. From the 
+application side, it is necessary to establish the communication between 
+GDB and XMON through a communication device (e.g. UART). The device 
+interrupt can simply execute 'break 1,15' instruction which will result 
+in all requests from GDB to invoke XMON.
+
+
+REQUIREMENTS
+------------
+
+The Xtensa processor must be configured with the Debug option.
+
+
+SUPPORTED GDB COMMANDS
+----------------------
+
+ command       function                            Return value
+
+ ?             Report the last sigval              SNN   (signal NN)
+ mAA..AA,LLLL  Read LLLL bytes at address AA..AA   hex data or ENN
+ MAA..AA,LLLL  Write LLLL bytes at address AA.AA   OK or ENN
+ pREG          Read value of register REG          hex data or ENN
+ PREG=VAL      Write reg. REG with value VAL       OK or ENN
+ c             Resume at current address           SNN   ( signal NN)
+ cAA..AA       Continue at address AA..AA          SNN
+ s             Step one instruction                SNN
+ sAA..AA       Step one instruction from AA..AA    SNN
+ Z0,AA..AA,LL  Plant a software breakpoint of      OK or ENN
+               length LL at address AAAA
+ z0,AA..AA,LL  Unplant a software breakpoint of    OK or ENN
+               length LL from address AAAA
+ qC            Return current thread ID            1
+ qRcmd         Monitor commands                    OK
+ qSupported    Supported features                  PacketSize='hex data string'
+ qsThreadInfo  Number of threads                   1
+ qfThreadInfo  Number of threads                   1
+ qxn           Query target                        XMON version string
+ qxtreg        Read TIE register                   hex data or ENN
+ Qxtreg        Write TIE register                  OK or ENN
+ Qxtexe        TODO !
+ k             kill
+ R XX          Program reset                       OK and SIGINT
+
+
+LIMITATIONS
+-----------
+
+XMON does not support the following GDB protocol packets/features:
+
+  !           Extended mode
+  F...        File I/O extension protocol
+  Zn/zn...    (n>0) Adding/removing hardware breakpoints/watchpoints
+  (Xtensa extensions:)
+  Qxtexe=...      Execute an arbitrary instruction
+  Qxtsis...
+  Qxtexcmlvl...
+  Qxtstepexc...
+
+XMON has only limited support for the following:
+
+  qRcmd           GDB "monitor" commands
+  qC              Return current thread ID (single thread)
+  qfThreadInfo    List first thread (single thread)
+  qsThreadInfo    List subsequent thread (single thread)
+
+
+RUNNING XMON IN A DEVELOPMENT SETTING
+-------------------------------------
+
+In a development setting, you might want to test XMON but have the
+convenience of OCD to download and run the program that embeds XMON.
+This section describes that scenario, using XOCD for initial download.
+
+You will need two invocations of xt-gdb, *at the same time*.
+One GDB, together with OCD and JTAG will be used to download and run XMON.
+Second GDB will connect to the running XMON using the serial connection.
+
+First, invoke the GDB to attach to the XMON over the serial port. XMON is 
+not yet running at this point but this step precedes actual XMON download 
+in order to be able to see XMON output right from the start.
+The second one is to download XMON itself, over XOCD.
+
+   $ xt-gdb
+   (xt-gdb) tar rem /dev/ttyS0
+   ... wait for XMON to come up ...
+
+Second GDB is invoked in order to download and run XMON. After downloading 
+XMON, you have to detach, which disconnects OCD and lets the program run.
+
+   $ xt-gdb xxmon-xtml605
+   (xt-gdb) tar rem :20000
+   (xt-gdb) reset
+   (xt-gdb) load
+   (xt-gdb) detach
+
+
+Now that XMON is running, and the first xt-gdb should get control. (Or if
+instead of the first GDB, you're using a terminal emulator, you should see
+a bit of output (for example the dollar sign).
+
+In steps:
+
+1. The target board must have a serial connection with the host. A serial 
+   cable is used for that and the default serial port is ttyS0.
+2. The first step involves loading the application code on the target which 
+   is done through the xocd.
+3. To run xocd: 
+   sudo <path/to/builds-directory>/_swtools_/xbuild/Software/ocd/xt-ocd
+   Keep the xocd runnning
+4. Load the program using: 
+   sudo <path/to/swtools>/xt-gdb 
+        </path/to/builds-directory>/<Config>/xbuild/OS/xmon/xxmon-xtav60 
+        --xtensa-core=<Config>
+   run: tar rem:20000
+        reset
+        load
+        detach
+   This should be run after the serial communication gdb is started
+5. To run the serial communication gdb use sudo otherwise it would not allow 
+   you to communicate with the ttyS0:
+   sudo <path/to/swtools>/xt-gdb --xtensa-core=<Config>
+   run: set debug remote 1
+        set remotebaud 38400
+        tar rem /dev/ttyS0
+
+Now, once you detach, packets are sent from gdb and replied to by the target.
+for example: gdb sends a packet p20, requesting to read the pc, by default
+the application code written now is a loop which has a break in it. The pc 
+points to the address of that loop.
+
+XMON AND GDBIO LSP
+-------------------------------------
+GDBIO LSP uses breakpoints to support calls to the host system. 
+Logs coming to the registered handler must be printed using a mechanism which 
+doesn't compile into the GDBIO’s host system call breakpoint. 
+E.g. if logs are printed using printf that would result in each XMON log message
+generating another breakpoint, resulting in endless XMON entry recursion.
+The provided example can be easily converted into a GDBIO example. The missing 
+board support functionality (absent as the board LSP is not used) can be 
+obtained by simply using a library for that particular board. 
+E.g. : -lxtkc705 will the include library with the KC705 support functions.
+

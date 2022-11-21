@@ -1,0 +1,17 @@
+TOP_DIR=$(XTENSA_OCL_TESTS_DIR)
+
+HOST_SRC_CPP_FILES = test.cpp ${TOP_DIR}/Native/Convolve3D_ref/Conv3D8x8.cpp
+DEVICE_SRC_CL_FILES =  convolve3D.cl
+
+DEVICE_OPTFLAGS = -mllvm -tensilica-misaligned-ldst-opt -mllvm -mao-allow-byte-idx-group=true
+
+LDFLAGS=$(BIN)/host/convolve3D.a -L$(XTENSA_OCL_RT)/host/lib -lxocl-host-rt-sim-shared -Wl,-rpath=$(XTENSA_OCL_RT)/host/lib
+
+ifeq (${TARGET}, xtensa)
+  include ../Makefile.xtensa-host
+else
+  include ../Makefile.x86_64-host
+endif
+
+clean::
+	rm -rf *gmon* Output_halide.yuv Output_native.yuv Input.yuv

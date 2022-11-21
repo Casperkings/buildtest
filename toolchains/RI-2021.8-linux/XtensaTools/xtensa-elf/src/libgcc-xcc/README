@@ -1,0 +1,43 @@
+libgcc-xcc README for Tensilica
+------------------------------------------------------------------------
+
+This directory contains the source files for Xtensa version of the libgcc
+library.  This library is used with programs compiled by Xtensa C/C++ compiler.
+
+If you need to rebuild this library for some reason, this document outlines
+the steps you will need to take.  Note that a Unix-compatible environment
+(e.g., Linux, Solaris, or Cygwin on Windows) is required to rebuild libgcc.
+
+* Put the XtensaTools/bin directory on your path.
+
+* Set XTENSA_CORE to select an Xtensa processor configuration.
+
+* Create an empty build directory and cd to it.
+
+* Run the following configure command:
+
+  [libgccdir]/configure --target=xtensa-elf --prefix=[installdir]
+
+  where [libgccdir] is the XtensaTools/xtensa-elf/src/libgcc-xcc directory
+  and [installdir] is the directory where you want to install the result.
+
+* Back up original files (if you are going to overwrite files in an
+  installed Xtensa configuration).  When you run make (in the next
+  step), the following files will be installed in the
+  [installdir]/xtensa-elf/lib/xcc directory:
+
+	crtbegin.o
+	crtbeginS.o
+	crtbeginT.o
+	crtend.o
+	crtendS.o
+	crti.o
+	crtn.o
+	libgcc.a
+
+  If you want to save the original copies of these files, be sure to
+  copy them somewhere.
+
+* Run make:
+
+  make all-target install-target

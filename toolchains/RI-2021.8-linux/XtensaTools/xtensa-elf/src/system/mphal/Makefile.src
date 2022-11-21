@@ -1,0 +1,108 @@
+#  Source Makefile for MP HAL
+#
+#  This makefile is never invoked directly (which is why it's named
+#  Makefile.src rather than Makefile).  It is always included by a
+#  small generated Makefile in the corresponding build subdirectory.
+#  This generated Makefile includes a generated Makefile.info
+#  and sets SRC_SUBDIR before including this Makefile.src.
+#
+# Copyright (c) 2001-2010 by Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+include $(XTENSA_TOOLS_ROOT)/src/system/mbuild-defs.mk
+include $(XTENSA_SYSTEM_ROOT)/sys-defs.mk
+
+#INST_LIB_DIR = $(XTENSA_SYSTEM_ROOT)/xtensa-elf/lib
+INST_INC_DIR = $(XTENSA_SYSTEM_ROOT)/xtensa-elf/include/xtensa
+CORE_INC_DIR = $(XTENSA_SYSTEM_ROOT)/cores/$(core)/xtensa-elf/include/xtensa
+CORE_LIB_DIR = $(XTENSA_SYSTEM_ROOT)/cores/$(core)/xtensa-elf/lib
+LINKMAP_LIB_DIR = $(XTENSA_SYSTEM_ROOT)/cores/$(linkmap)/xtensa-elf/lib
+CONFIG_DIR   = $(shell xt-run --xtensa-core=$(core) --show-config=config)
+CFG_LIB_DIR  = $(CONFIG_DIR)/xtensa-elf/arch/lib
+
+#SUBDIRS = $(CONFIGS)
+#SUBMAKEFILE_SRC = $(SRCDIR)/Makefile.src.perconfig
+
+#PARTIAL_LSPS = shared shared-rom
+#PARTIALIMAGE_LSPS := $(foreach linkmap,$(LINKMAPS),$(if $(LINKMAP_$(linkmap)_FULL_IMAGE:0=),,$(foreach lsp,$(PARTIAL_LSPS),$(LINKMAP_LIB_DIR)/$(lsp)/.lspdone)))
+
+MPCORE_HEADERS := $(foreach core,$(CORES),$(CORE_INC_DIR)/mpcore.h)
+FULLIMAGE_LSPS    := $(foreach linkmap,$(LINKMAPS),$(if $(LINKMAP_$(linkmap)_FULL_IMAGE:0=),$(LINKMAP_LIB_DIR)/.lspdone))
+PARTIALIMAGE_LSPS := $(foreach linkmap,$(LINKMAPS),$(if $(LINKMAP_$(linkmap)_FULL_IMAGE:0=),,$(LINKMAP_LIB_DIR)/shared/.lspdone))
+
+ifndef MBUILD_LSPS_OPTIONS
+#  No ldapp, no boards, by default.  They're really different systems.
+MBUILD_LSPS_OPTIONS = -mlsp=gdbio,gdbio-rom,ngo-sample-gdbio,min-rt,min-rt-rom,nort,nort-rom,rtos-ram,rtos-ramp,rtos-res,rtos-rom,sim,sim-rom,sim-stacklocal,tiny,tiny-rom
+#  Not including these by default, location is best controlled via script to mbuild:
+###gdbio-local,gdbio-stacklocal,min-rt-local,sim-local,sim-stacklocal
+endif
+
+#######  Rules start here  #######
+
+#  Default target:
+all: mpsystem.h install-headers $(MPCORE_HEADERS) lsps
+
+subdirs-all: install-headers
+
+.PHONY: install-headers lsps
+
+mpsystem.h: $(SOCFILE) $(XTENSA_TOOLS_ROOT)/xtensa-elf/src/system/mphal/mpsystem.h.tpp
+	$(SYSTPP) -x $(SOCFILE) \
+			-I $(XTENSA_TOOLS_ROOT)/lib/perl \
+			-o $@ $(XTENSA_TOOLS_ROOT)/xtensa-elf/src/system/mphal/mpsystem.h.tpp
+
+$(MPCORE_HEADERS): $(XTENSA_SYSTEM_ROOT)/cores/%/xtensa-elf/include/xtensa/mpcore.h: $(SRCDIR)/mpcore.h.tpp
+	-$(call mkpath, $(@D))
+	$(SYSTPP) -x $(SOCFILE) \
+			-I $(XTENSA_TOOLS_ROOT)/lib/perl \
+			-e 'our $$corename = "$*";' \
+			-o $@ $<
+
+lsps: $(FULLIMAGE_LSPS) $(PARTIALIMAGE_LSPS)
+	$(foreach core,$(SHARED_RESET_CORES), \
+	  $(foreach lspdir,$(wildcard $(CORE_LIB_DIR)/*/.), \
+	    $(call cp, $(CFG_LIB_DIR)/_sharedvectors-for-reset.o, $(lspdir)/_sharedvectors.o)$N))
+
+$(FULLIMAGE_LSPS): $(XTENSA_SYSTEM_ROOT)/cores/%/xtensa-elf/lib/.lspdone:
+	-$(call mkpath, $(@D))
+	$C  -----  LSP generation for LINKMAP $*  -----
+	xt-regenlsps --xtensa-system=$(XTENSA_SYSTEM) --xtensa-core=$* \
+		-dstbase $(@D) -u -f -mref -diags \
+		$(MBUILD_LSPS_OPTIONS) \
+		-syscore $* \
+		$(patsubst %,-reset-table-vaddr %,$(CORE_$*_RESET_TABLE_VADDR)) \
+		$(patsubst %,-mvecbase %,$(CORE_$*_VECBASE)) \
+		$(patsubst %,-mvecselect %,$(CORE_$*_VECSELECT)) \
+		$(patsubst %,-mvecreset %,$(CORE_$*_VECRESET_PINS)) 
+#	$C  FIXME - Unfortunately, the following only works in Unix:
+#	-for name in `find $(@D) -name specs`; do \
+#	  sed s/"-lhandlers"/"-lxmp -lhandlers"/ --in-place $$name; \
+#	done
+	echo done > $(subst /,$S,$@)
+
+
+
+$(PARTIALIMAGE_LSPS): $(XTENSA_SYSTEM_ROOT)/cores/%/xtensa-elf/lib/shared/.lspdone:
+	-$(call mkpath, $(@D))
+	$C  -----  Partial-image shared LSP generation for LINKMAP $*  -----
+	xt-genldscripts -defer -syscore shared --xtensa-system=$(XTENSA_SYSTEM) \
+	   --xtensa-core=$(SHARED_CONFIG) -shared \
+	   -u -mref --sym-prefix="_shared" -b $(@D)
+	$(call cp, $(XTENSA_TOOLS_ROOT)/xtensa-elf/src/system/mphal/shared-lsp.specs, $(@D)/specs)
+	echo done > $(subst /,$S,$@)
+
+install-headers: mpsystem.h
+	-$(call mkpath, $(INST_INC_DIR)/system)
+	$(call cp, mpsystem.h, $(INST_INC_DIR)/system)
+
+clean:
+	-$(call rm, mpsystem.h)
+
+
+include $(XTENSA_TOOLS_ROOT)/misc/rules.mk
+

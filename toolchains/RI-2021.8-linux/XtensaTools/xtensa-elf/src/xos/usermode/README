@@ -1,0 +1,93 @@
+
+To build and run the examples:
+
+- Go into the src directory, do "make clean; make all" after
+  having edited xos_params.h to set XOS_OPT_UM to 1. Or, run
+  "make all CFLAGS_EXTRA=-DXOS_OPT_UM=1".
+
+- Go into the usermode directory, do "make clean; make all".
+  This makefile forces XOS_OPT_UM to 1. To build the IDMA
+  example, run "make idma". The IDMA example will only build
+  and run on configs equipped with IDMA. Set CORE appropriately
+  in the makefile or via command line.
+
+- The *.dynlib files are the dynamic libraries that implement
+  the user mdoe threads. Specify the library name as an argument
+  to the um_test.exe application.
+
+    xt-run um_test.exe example_basic.dynlib
+
+- Examining the sources for the test application and examples is
+  the best way to understand the program flow.
+
+
+- User mode threads can be created and run. The thread entry point
+  is called in user mode and from then on it stays in user mode.
+
+- The example main application shows how to init user mode support,
+  create user threads etc. The memory allocation scheme is an example,
+  and can be done in other ways.
+
+- There are no syscalls for memory allocation/free. User mode memory
+  has to be allocated by a privileged mode thread and assigned to
+  a user mode thread at create time.
+
+- Custom syscall handling can be implemented by registering your own
+  syscall handler before calling xos_um_init(). If the XOS syscall
+  handler does not recognize the syscall ID, it will forward to your
+  handler.
+
+- The files sample_controller_mpu.c and um_test.c show how the MPU is
+  set up. Note that two entries are set aside for mapping the per
+  thread user memory. The indices of these entries are made known
+  to XOS via xos_uthread_create(). If per-thread memory 
+  isolation is not desired, the MPU setup can be altered to not set
+  aside these entries, and xos_thread.c will need to be modified to 
+  not update the MPU on thread switch. There will be a cleaner way
+  to do this, later.
+
+- If multiple threads are set up with the same memory parameters
+  they will effectively 'share' the same memory region and MPU settings.
+  Note that this region would have to include *ALL* the memory used by
+  these threads, including the thread stacks.
+
+- Syscall overhead for a specific config needs to be measured on that
+  config build.
+
+IDMA Support
+------------
+
+- The IDMA example consists of two files: idma_test.c has the supervisor
+  mode code that sets everything up, and example_idma.c has the usermode
+  library code that actually does IDMA transfers. The usermode library
+  has to be compiled with IDMA_USERMODE defined, and has to be linked with
+  libidma-um.a.
+
+- The usermode libidma works pretty much the same as the standard version,
+  except that it does not support operations that require privileged
+  access. So it does not allow installing interrupt handlers/callbacks,
+  does not support disabling interrupts around critical sections, and
+  does not support the idma_sleep() function. If the channel is to be
+  used by multiple user-mode threads, then thread safety will need to
+  be ensured by the application.
+
+- Note that idma_init() is expected to be called by privileged code
+  to init the channel.
+
+- Completion callbacks are not supported at this time because there is
+  no support yet for callbacks from supervisor to user mode. If similar
+  functionality to callbacks/sleep is desired, one way to do it would be
+  like so:
+
+    - in privileged code, after channel init, install a handler for the
+      idma completion/error interrupts.
+    - set up a user-mode semaphore for the channel, pass its handle to
+      the user-mode application.
+    - every time a completion interrupt is seen, signal the semaphore 
+      from privileged mode. Wait on the semaphore from user mode.
+    - create another semaphore for the error case if needed.
+
+  We have not actually tried this mechanism yet, but it should work.
+
+---
+

@@ -1,0 +1,41 @@
+/* Copyright (c) 2003-2015 Cadence Design Systems, Inc.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+#ifndef __XIPC_MUTEX_INTERNAL_H__
+#define __XIPC_MUTEX_INTERNAL_H__
+
+#include <stdint.h>
+#include "xipc_mutex.h"
+#include "xipc_common.h"
+
+#define XIPC_MUTEX_NO_OWNER    0
+#define XIPC_MUTEX_MAX_WAITERS 16
+
+struct xipc_mutex_struct {
+  volatile uint32_t _lock;
+  xipc_wait_kind_t  _wait_kind;
+  uint32_t          _wq_head;
+  uint32_t          _wq_tail;
+  uint32_t          _owner;
+  uint32_t          _wait_queue[XIPC_MUTEX_MAX_WAITERS];
+};
+
+#endif /* __XIPC_MUTEX_INTERNAL_H__ */

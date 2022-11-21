@@ -1,0 +1,10 @@
+CRTSTUFF_T_CFLAGS +=
+CRTSTUFF_T_CFLAGS_S +=
+TARGET_LIBGCC2_CFLAGS += -mno-l32r-flix
+ifeq ($(GCC_FOR_TARGET),xt-xcc)
+TARGET_LIBGCC2_CFLAGS += -INLINE:aggressive 
+endif
+
+EXTRA_MULTILIB_PARTS = crtbegin.o crtend.o crtbeginS.o crtendS.o crtbeginT.o
+
+SHLIB_MAPFILES += $(srcdir)/config/xtensa/libgcc-xtensa.ver

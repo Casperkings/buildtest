@@ -1,0 +1,192 @@
+# Makefile for the boards directory
+
+# Copyright (c) 2000-2013 Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+#
+#  This makefile assumes GNU make features
+#
+#  Invoke this Makefile like this:
+#	cd <some build directory>
+#	make -f <this file> XTENSA_TOOLS_ROOT=<path to Xtensa Tools> \
+#		XTENSA_ROOT=<path to Xtensa core package> \
+#		INSTLIBDIR=<path to installation directory> \
+#		INSTCLIBDIR=<path to C-lib-specific installation directory>
+#		INSTBINDIR=<path to bin directory for pre-built examples>
+#
+
+ifndef XTENSA_TOOLS_ROOT
+$(error Please set XTENSA_TOOLS_ROOT to the path to Xtensa Tools)
+endif
+#  NOTE:  For now, we assume $(XTENSA_TOOLS_ROOT)/bin is on the PATH.
+ifndef XTENSA_ROOT
+$(error Please set XTENSA_ROOT to the path to your specific Xtensa core package)
+endif
+ifndef INSTLIBDIR
+$(error Please set INSTLIBDIR to the path where libraries and objects are installed)
+#INSTLIBDIR = $(call fixpath,$(XTENSA_ROOT)/xtensa-elf/arch/lib)
+endif
+ifndef INSTCLIBDIR
+$(error Please set INSTCLIBDIR to the path where C-library-specific libraries and objects are installed)
+#INSTCLIBDIR = $(call fixpath,$(XTENSA_ROOT)/xtensa-elf/lib)
+endif
+ifndef INSTBINDIR
+$(error Please set INSTBINDIR to the path where prebuilt example binaries are installed)
+#INSTBINDIR = $(call fixpath,$(XTENSA_ROOT)/xtensa-elf/bin)
+endif
+
+#  Select the specified Xtensa configuration:
+export XTENSA_SYSTEM = $(XTENSA_ROOT)/config
+export XTENSA_CORE = default
+
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+include $(XTENSA_ROOT)/misc/build.mk
+
+ifndef SRCDIR
+$(error Please set MAKEFILE_SRC to the path to this Makefile.src)
+endif
+
+CFLAGS = -O2 -g -mlongcalls
+
+XT1000_OBJS = \
+	xt1000/leds.o	\
+	xt2000/gloss.o	\
+	xt2000/uart.o	\
+	xt2000/xtfreq.o
+
+XT2000_OBJS = \
+	xt2000/xtfreq.o		\
+	xt2000/xtboard.o	\
+	xt2000/gloss.o		\
+	xt2000/uart.o		\
+	xt2000/xt2000-uart.o	\
+	xt2000/xt2000-leds.o	\
+	xt2000/xt2000-i2cdev.o	\
+	xt2000/xt2000-board.o	\
+	xt2000/xt2000-display.o
+
+MINRT_OBJS = mingloss.o board_init.o
+TINY_OBJS  = tinygloss.o board_init.o
+UART_OBJS  = xtbsp-gloss-uart-p.o xtbsp-uart-16550-p.o uart-16550-p.o
+
+# List of XTBSP supported boards (XT?000 are obsolete and not supported this way).
+BOARDS = xtml605 xtkc705 xtav110 xtav60 xtav200
+ifeq ($(XPAL_BUILD_XTBOARD),xthifi2)
+BOARDS += xthifi2
+endif
+BSP_LIBS    = $(BOARDS:%=all-%)
+BSP_CLEAN   = $(BOARDS:%=clean-%)
+BSP_INSTALL = $(BOARDS:%=install-%)
+
+ALL_TARGETS = libminrt.a libtinyrt.a libuart.a
+
+#  Obsolete boards, Tensilica-internal only.
+ifdef TEN4_INTERNAL
+#ALL_TARGETS += libxt2000.a 
+ifeq ($(XPAL_BUILD_XT1000),1)
+#ALL_TARGETS += libxt1000.a 
+endif
+endif
+
+.PHONY: all install clean $(BSP_LIBS) $(BSP_INSTALL) $(BSP_CLEAN) examples $(BSP_EXAMPLES)
+
+all: $(ALL_TARGETS) $(BSP_LIBS)
+
+libxt1000.a: $(XT1000_OBJS)
+libxt2000.a: $(XT2000_OBJS)
+libminrt.a:  $(MINRT_OBJS)
+libtinyrt.a: $(TINY_OBJS)
+
+libuart.a : $(UART_OBJS)
+
+# Use the board-support Makefiles to build the libraries for XTBSP supported boards.
+BSPPARAMS = -f $(XTENSA_TOOLS_ROOT)/xtensa-elf/src/boards/$(BOARD)/Makefile \
+		XTENSA_TOOLS_ROOT=$(XTENSA_TOOLS_ROOT) \
+		XTENSA_ROOT=$(XTENSA_ROOT) \
+		INST_DIR=$(INSTLIBDIR) \
+		INTERN_SRC=$(INTERN_SRC) \
+		CC="$(CC_FOR_TARGET)" \
+		-C $(BOARD)
+
+$(BSP_LIBS): BOARD = $(@:all-%=%)
+$(BSP_LIBS):
+	$(MKPATH) $(BOARD)
+	$(MAKE) $(BSPPARAMS) all
+
+$(BSP_INSTALL): BOARD = $(@:install-%=%)
+$(BSP_INSTALL):
+	$(MKPATH) $(BOARD)
+	$(MAKE) $(BSPPARAMS) install
+
+$(BSP_CLEAN): BOARD = $(@:clean-%=%)
+$(BSP_CLEAN):
+	-$(MAKE) $(BSPPARAMS) clean
+
+# Use the xtbsp and board-specific example Makefiles to pre-build the board examples.
+# This must be done *after* XTOS has been built, so cannot be done in the standard
+# 'install' target here (which is invoked before xtos because xtos depends on it).
+BSP_EXAMPLES = $(BOARDS:%=examples-%)
+
+$(BSP_EXAMPLES): BOARD = $(@:examples-%=%)
+$(BSP_EXAMPLES):
+	$(MKPATH) $(INSTBINDIR)/$(BOARD)
+	-$(MAKE) -f $(XTENSA_TOOLS_ROOT)/xtensa-elf/src/boards/examples/xtbsp/Makefile \
+		XTENSA_TOOLS_ROOT=$(XTENSA_TOOLS_ROOT) \
+		XTENSA_ROOT=$(XTENSA_ROOT) \
+		CC=$(CC_FOR_TARGET) \
+		-C $(INSTBINDIR)/$(BOARD) BOARD=$(BOARD)
+	-$(MAKE) -f $(XTENSA_TOOLS_ROOT)/xtensa-elf/src/boards/examples/$(BOARD)/Makefile \
+		XTENSA_TOOLS_ROOT=$(XTENSA_TOOLS_ROOT) \
+		XTENSA_ROOT=$(XTENSA_ROOT) \
+		INTERN_SRC=$(INTERN_SRC) \
+		CC=$(CC_FOR_TARGET) \
+		-C $(INSTBINDIR)/$(BOARD)
+
+examples: $(BSP_EXAMPLES)
+
+#  Special rules to build LED pattern arrays using perl:
+xt1000/leds.o : xt1000/ledpats.c
+xt1000/ledpats.c : xt1000/ledpats.pl
+	$(PERL) $< > $@
+
+%.o: %.S
+	@$(MKPATH) $(@D)
+	$(CC_FOR_TARGET) -c $(CFLAGS) -o $@ $<
+
+%.o: %.c
+	@$(MKPATH) $(@D)
+	$(CC_FOR_TARGET) -c $(CFLAGS) -o $@ $<
+
+%-p.o: %.c
+	@$(MKPATH) $(@D)
+	$(CC_FOR_TARGET) -c $(CFLAGS) -DCONFIG_UART_PORTABLE=1 -o $@ $<
+
+%.o: ../%.c
+	@$(MKPATH) $(@D)
+	$(CC_FOR_TARGET) -c $(CFLAGS) -o $@ $<
+
+%.a:
+	$(AR_FOR_TARGET) -rc $@ $^
+
+$(INSTLIBDIR):
+	$(MKPATH) $@
+
+install: all $(BSP_INSTALL)
+ifdef TEN4_INTERNAL
+ifeq ($(XPAL_BUILD_XT1000),1)
+#	$(CP) libxt1000.a $(INSTLIBDIR)
+endif
+#	$(CP) libxt2000.a $(INSTLIBDIR)
+endif
+	$(CP) libminrt.a $(INSTLIBDIR)
+	$(CP) libtinyrt.a $(INSTLIBDIR)
+	$(CP) libuart.a $(INSTLIBDIR)
+	$(MKPATH) $(INSTCLIBDIR)
+
+clean: $(BSP_CLEAN)
+	$(RM) $(XT1000_OBJS) $(XT2000_OBJS) $(MINRT_OBJS) $(TINY_OBJS) $(UART_OBJS) $(ALL_TARGETS)
+

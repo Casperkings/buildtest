@@ -1,0 +1,55 @@
+newlib README for Tensilica
+------------------------------------------------------------------------
+
+This directory contains the source files for the newlib library, and
+includes both libc and libm. This version of newlib includes support
+for Xtensa processors.
+
+If you need to rebuild newlib for some reason, this document outlines
+the steps you will need to take.  More information about newlib is
+available online at http://sourceware.org/newlib/.  Note that a Unix-
+compatible environment (e.g., Linux, Solaris, or Cygwin on Windows) is
+required to rebuild newlib.
+
+NOTE: This rebuild process only works if your processor configuration
+(i.e. what you specify for XTENSA_CORE) was built with newlib selected
+as the C library. If the configuration was built with another library
+then this process will not work.
+
+* Put the XtensaTools/bin directory on your path.
+
+* Set XTENSA_CORE to select an Xtensa processor configuration.
+
+* Set the following environment variables
+
+  ("bash" syntax):
+  export XTENSA_CC_FOR_TARGET="xt-clang"
+  export XTENSA_CXX_FOR_TARGET="xt-clang++"
+  export CFLAGS="-O2 -g"
+  export CXXFLAGS="-O2 -g"
+
+  ("csh" syntax):
+  setenv XTENSA_CC_FOR_TARGET "xt-clang"
+  setenv XTENSA_CXX_FOR_TARGET "xt-clang++"
+  setenv CFLAGS "-O2 -g"
+  setenv CXXFLAGS "-O2 -g"
+
+* Create an empty build directory and cd to it.
+
+* Run the following configure command:
+
+  [newlibdir]/configure --target=xtensa-elf --prefix=[installdir] --enable-languages=c,c++ --enable-newlib-io-long-long --enable-xcc
+
+  where [newlibdir] is the XtensaTools/xtensa-elf/src/newlib directory
+  and [installdir] is the directory where you want to install the result.
+
+* Back up original files (if you are going to overwrite files in an
+  installed Xtensa configuration).  When you run make (in the next
+  step), the newlib files will be installed in the
+  [installdir]/xtensa-elf/include and [installdir]/xtensa-elf/lib
+  directories.  If you want to save the original copies of these files,
+  be sure to copy them somewhere.
+
+* Run make:
+
+  make all-target install-target

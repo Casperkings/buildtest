@@ -1,0 +1,194 @@
+# configure.in for libgcc (XCC version).
+# Process this file with autoconf to generate a configuration script.
+
+# Copyright (c) 2003-2008 Tensilica Inc.
+
+# This file was derived from GCC and is free software; you can
+# redistribute it and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software Foundation; either
+# version 2, or (at your option) any later version.
+
+AC_PREREQ(2.59)
+AC_INIT(libgcc2.c)
+
+# Determine the host, build, and target systems
+AC_CANONICAL_BUILD
+AC_CANONICAL_HOST
+AC_CANONICAL_TARGET
+
+AC_PROG_INSTALL
+AC_PROG_AWK
+
+dnl See if symbolic links work and if not, try to substitute either hard links or simple copy.
+AC_DEFUN([gcc_AC_PROG_LN_S],
+[AC_MSG_CHECKING(whether ln -s works)
+AC_CACHE_VAL(gcc_cv_prog_LN_S,
+[rm -f conftestdata_t
+echo >conftestdata_f
+if ln -s conftestdata_f conftestdata_t 2>/dev/null
+then
+  gcc_cv_prog_LN_S="ln -s"
+else
+  if ln conftestdata_f conftestdata_t 2>/dev/null
+  then
+    gcc_cv_prog_LN_S=ln
+  else
+    if cp -p conftestdata_f conftestdata_t 2>/dev/null
+    then
+      gcc_cv_prog_LN_S="cp -p"
+    else
+      gcc_cv_prog_LN_S=cp
+    fi
+  fi
+fi
+rm -f conftestdata_f conftestdata_t
+])dnl
+LN_S="$gcc_cv_prog_LN_S"
+if test "$gcc_cv_prog_LN_S" = "ln -s"; then
+  AC_MSG_RESULT(yes)
+else
+  if test "$gcc_cv_prog_LN_S" = "ln"; then
+    AC_MSG_RESULT([no, using ln])
+  else
+    AC_MSG_RESULT([no, and neither does ln, so using $gcc_cv_prog_LN_S])
+  fi
+fi
+AC_SUBST(LN_S)dnl
+])
+gcc_AC_PROG_LN_S
+
+AC_ARG_ENABLE(shared,
+[  --disable-shared        don't provide a shared libgcc],
+[
+  case $enable_shared in
+  yes | no) ;;
+  *)
+    enable_shared=no
+    IFS="${IFS= 	}"; ac_save_ifs="$IFS"; IFS="${IFS}:,"
+    for pkg in $enableval; do
+      if test "X$pkg" = "Xgcc" || test "X$pkg" = "Xlibgcc"; then
+        enable_shared=yes
+      fi
+    done
+    IFS="$ac_save_ifs"
+    ;;
+  esac
+], [enable_shared=yes])
+AC_SUBST(enable_shared)
+
+# Collect target-machine-specific information.
+. ${srcdir}/config.gcc
+
+tm_file="${tm_file} defaults.h"
+host_xm_file="auto-host.h ansidecl.h ${host_xm_file}"
+# We don't want ansidecl.h in target files, write code there in ISO/GNU C.
+# put this back in temporarily.
+xm_file="auto-host.h ansidecl.h ${xm_file}"
+
+# Conditionalize the makefile for this host machine.
+xmake_file=
+for f in ${host_xmake_file}
+do
+	if test -f ${srcdir}/config/$f
+	then
+		xmake_file="${xmake_file} \$(srcdir)/config/$f"
+	fi
+done
+
+# Conditionalize the makefile for this target machine.
+tmake_file_=
+for f in ${tmake_file}
+do
+	if test -f ${srcdir}/config/$f
+	then
+		tmake_file_="${tmake_file_} \$(srcdir)/config/$f"
+	fi
+done
+tmake_file="${tmake_file_}"
+
+tm_file_list="options.h"
+tm_include_list="options.h"
+for f in $tm_file; do
+  case $f in
+    defaults.h )
+       tm_file_list="${tm_file_list} \$(srcdir)/$f"
+       tm_include_list="${tm_include_list} $f"
+       ;;
+    * )
+       tm_file_list="${tm_file_list} \$(srcdir)/config/$f"
+       tm_include_list="${tm_include_list} config/$f"
+       ;;
+  esac
+done
+
+xm_file_list=
+xm_include_list=
+for f in $xm_file; do
+  case $f in
+    ansidecl.h | auto-host.h )
+       xm_file_list="${xm_file_list} $f"
+       xm_include_list="${xm_include_list} $f"
+       ;;
+    * )
+       xm_file_list="${xm_file_list} \$(srcdir)/config/$f"
+       xm_include_list="${xm_include_list} config/$f"
+       ;;
+  esac
+done
+
+host_xm_file_list=
+host_xm_include_list=
+for f in $host_xm_file; do
+  case $f in
+    ansidecl.h | auto-host.h )
+       host_xm_file_list="${host_xm_file_list} $f"
+       host_xm_include_list="${host_xm_include_list} $f"
+       ;;
+    * )
+       host_xm_file_list="${host_xm_file_list} \$(srcdir)/config/$f"
+       host_xm_include_list="${host_xm_include_list} config/$f"
+       ;;
+  esac
+done
+
+# If this is a cross-compiler that does not
+# have its own set of headers then define
+# inhibit_libc
+
+# If this is using newlib, without having the headers available now,
+# then define inhibit_libc in LIBGCC2_CFLAGS.
+# This prevents libgcc2 from containing any code which requires libc
+# support.
+inhibit_libc=false
+if { { test x$host != x$target && test "x$with_sysroot" = x ; } ||
+       test x$with_newlib = xyes ; } &&
+     { test "x$with_headers" = x || test "x$with_headers" = xno ; } ; then
+       inhibit_libc=true
+fi
+AC_SUBST(inhibit_libc)
+
+libgcc_visibility=yes
+AC_SUBST(libgcc_visibility)
+
+# Find a directory in which to install a shared libgcc.
+AC_ARG_WITH(slibdir,
+[  --with-slibdir=DIR      shared libraries in DIR [[LIBDIR]]],
+slibdir="$with_slibdir",
+slibdir='$(libsubdir)')
+AC_SUBST(slibdir)
+
+# Substitute configuration variables
+AC_SUBST(srcdir)
+AC_SUBST(xmake_file)
+AC_SUBST(tmake_file)
+AC_SUBST(tm_file_list)
+AC_SUBST(tm_include_list)
+AC_SUBST(tm_defines)
+AC_SUBST(host_xm_file_list)
+AC_SUBST(host_xm_include_list)
+AC_SUBST(host_xm_defines)
+AC_SUBST(xm_file_list)
+AC_SUBST(xm_include_list)
+AC_SUBST(xm_defines)
+
+AC_OUTPUT(Makefile mklibgcc)

@@ -1,0 +1,96 @@
+#  Example Makefile for an MP test application
+#
+#  This Makefile can be invoked like this:
+#
+#	(first put $XTENSA_TOOLS_ROOT/bin on the PATH)
+#
+#	make -f <dir>/Makefile.test \
+#		XTENSA_SYSTEM_ROOT=$(XTENSA_SYSTEM_ROOT) \
+#		all test
+#
+# Copyright (c) 2001-2008 by Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+#  Test that we were invoked correctly:
+ifeq ($(wildcard $(XTENSA_SYSTEM_ROOT)/sys-defs.mk),)
+$(error Please set XTENSA_SYSTEM_ROOT to the system package directory)
+endif
+
+# Utility functions
+#  $(call Parent,path)
+#  Return parent directory of a file path
+Parent = $(patsubst %/,%,$(dir $(1)))
+#
+GParent = $(call Parent,$(call Parent,$(1)))
+#
+#  $(call PathSearch,$(PATH),:,filename)
+#  Search for a first occurance of filename in a colon-separated PATH list
+PathSearch = $(firstword $(wildcard $(addsuffix /$(3),$(subst $(2), ,$(1)))))
+#
+
+#  Find path to Xtensa Tools. 
+ifeq ($(SHELL),/bin/sh)
+ XTENSA_TOOLS_ROOT := $(call GParent,$(call PathSearch,$(PATH),:,xt-run))
+else
+ XTENSA_TOOLS_ROOT := $(call GParent,$(call PathSearch,$(PATH),;,xt-run.exe))
+endif
+
+#  Dir. containing this Makefile; must set before we include any other makefile:
+SRCDIR := $(dir $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
+
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+include $(XTENSA_TOOLS_ROOT)/src/system/mbuild-defs.mk
+include $(XTENSA_SYSTEM_ROOT)/sys-defs.mk
+
+#  List of core indices (zero-based):
+CORE_INDICES := $(wordlist 1,$(NCORES),0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
+#  Zero-based indexing:  $(call index0, <index>, <list>)
+index0 = $(if $(filter 0,$(1)),$(firstword $(2)),$(wordlist $(1),$(1),$(wordlist 2,99999,$(2))))
+I2CORE = $(call index0,$i,$(CORES))
+#INAMES := $(foreach i,$(CORE_INDICES), {$i is $(I2CORE)} )
+
+
+HELLO_SIM_PROGS = $(foreach i,$(CORE_INDICES), hello$i-sim.out)
+
+CFLAGS = -g -O2 -mlongcalls
+INCLUDES = \
+	-I$(XTENSA_SYSTEM_ROOT)/xtensa-elf/include \
+	-I$(XTENSA_SYSTEM_ROOT)/cores/$(I2CORE)/xtensa-elf/include \
+	-I$(SRCDIR)
+ALL_CFLAGS = --xtensa-core=$(I2CORE) $(CFLAGS) $(CFLAGS_EXTRA) $(INCLUDES)
+
+#######  Rules start here  #######
+
+all: $(HELLO_SIM_PROGS) 
+
+HELLO_TESTS := $(foreach i,$(CORE_INDICES),hello-test$i)
+.PHONY: test hello-tests $(HELLO_TESTS)
+
+$(HELLO_SIM_PROGS): i=$*
+$(HELLO_SIM_PROGS): hello%-sim.out: hello.c test2.c
+	@echo "Building $@ with '$*' and i=$i ."
+	$(CC_FOR_TARGET) $(ALL_CFLAGS) -o $@ $^ \
+		-mlsp=$(XTENSA_SYSTEM_ROOT)/cores/$(I2CORE)/xtensa-elf/lib/sim
+
+test: hello-tests
+
+hello-tests: $(HELLO_TESTS)
+$(HELLO_TESTS): i=$*
+$(HELLO_TESTS): hello-test%:
+	@echo -----------  TESTING $(I2CORE)  -----------
+	xt-run --xtensa-core=$(I2CORE) --proc_id=$i --mem_model --nosummary \
+		--itinit=0xabfaceff --dtinit=0x5abdaeef $(ISS_FLAGS) \
+		$(patsubst %,--vector=%,$(CORE_$(I2CORE)_VECSELECT)) \
+		$(patsubst %,--alt_reset_vec=%,$(CORE_$(I2CORE)_VECRESET_PINS)) \
+		hello$*-sim.out
+
+clean:
+	-$(call rm, $(HELLO_SIM_PROGS))
+
+include $(XTENSA_TOOLS_ROOT)/misc/rules.mk
+
+

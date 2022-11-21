@@ -1,0 +1,32 @@
+#  AddressMapped interface - parent class for all interfaces involving
+#  addresses (memory-mapped).  Memory mapping tools follow connections
+#  through such interfaces to elaborate the system memory map.
+
+# Copyright (c) 2018 by Cadence Design Systems, Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Cadence Design
+# Systems, Inc.  They may not be modified, copied, reproduced, distributed, or
+# disclosed to third parties in any manner, medium, or form, in whole or in
+# part, without the prior written consent of Cadence Design Systems, Inc.
+
+---
+types:
+  AddressMapped:
+    type: Interface
+    #  This can be overridden by sub-classes of this interface:
+    ports: [master, slave]
+    allow_subconnect: 0
+
+    #  Parameters:
+
+    #  This is the width needed to hold an address, so includes
+    #  bits down to 0 even if physical address signals skip lsbits
+    #  (such as those that index the data width).
+    #address_width: integer
+
+    #data_width: integer
+
+    #  Connection-time parameters:
+    #address: 0
+    #size: ~0
+

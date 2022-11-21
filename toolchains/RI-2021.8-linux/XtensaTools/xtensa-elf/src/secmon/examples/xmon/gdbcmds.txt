@@ -1,0 +1,5 @@
+set remotetimeout 30
+target remote localhost:20123
+set test_run_xmon=0
+detach
+quit

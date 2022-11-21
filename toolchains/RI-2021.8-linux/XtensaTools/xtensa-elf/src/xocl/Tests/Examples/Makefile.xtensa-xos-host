@@ -1,0 +1,10 @@
+CC=$(XTENSA_SYSTEM)/../bin/xt-clang
+CXX=$(XTENSA_SYSTEM)/../bin/xt-clang++
+ifeq (,$(wildcard $(CC)))
+  # Fall back to xt-clang from PATH
+  CC=xt-clang
+  CXX=xt-clang++
+endif
+
+include ../Makefile.common
+include ${TOP_DIR}/Makefile.xtensa-xos-host.common

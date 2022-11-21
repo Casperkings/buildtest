@@ -1,0 +1,5 @@
+CC  = ${ANDROID_BUILD}/bin/${ANDROID_HOST}-linux-android${ANDROID_API_LEVEL}-clang
+CXX = ${ANDROID_BUILD}/bin/${ANDROID_HOST}-linux-android${ANDROID_API_LEVEL}-clang++
+
+include ../Makefile.common
+include ${TOP_DIR}/Makefile.android-host.common

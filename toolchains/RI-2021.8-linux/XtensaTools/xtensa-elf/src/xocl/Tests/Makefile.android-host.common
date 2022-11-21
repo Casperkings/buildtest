@@ -1,0 +1,105 @@
+include ${TOP_DIR}/Makefile.common
+include ${TOP_DIR}/Makefile.android_host.platform
+
+# XTSC include files for the android host + device subsystem;
+XTSC=xtsc-run.android_host
+C_COMPILER = ${ANDROID_BUILD}/bin/${ANDROID_HOST}-linux-android${ANDROID_API_LEVEL}-clang
+ADB = $(shell which adb)
+
+ifeq ("$(wildcard $(ADB))", "")
+  $(error Tool $(ADB) does not exist)
+endif
+
+.PHONY: setup
+
+HOST_COMPILE_COMMON_FLAGS += -fPIE -fPIC
+HOST_CBE_CFLAGS += -fPIE -fPIC
+HOST_LIBCPP_SHARED = ${ANDROID_BUILD}/sysroot/usr/lib/${ANDROID_HOST}-linux-android/libc++_shared.so
+TARGET_DIR=/data
+
+# Link flags used to compile the host application on xtensa linux. Includes the
+# host OpenCL runtime and host XRP
+
+HOST_LDFLAGS = \
+  -L$(XTENSA_OCL_RT)/host/lib \
+  -lxocl-host-rt-native -lxdyn-lib-host-native -lxrp-linux-native \
+  -pthread -pie \
+  -Wl,-dynamic-linker,/system/bin/linker64 -Wl,-rpath,${TARGET_DIR}/opencl
+
+XTSC_RUN_BINARY_DEF = $(addprefix --define=,$(join \
+                        $(addsuffix _BINARY=,$(CORES)), $(DEVICE_EXES)))
+
+ifeq ($(ANDROID_HOST),x86_64)
+  EMULATOR_PARAMS = -qemu $(EMULATOR_DEVICE_PARAMS)
+else
+  EMULATOR_PARAMS = 
+endif
+
+ifeq ($(XT_OCL_DYN_LIB), 1)
+  COPY_DEVICE_LIB = 1
+else
+  COPY_DEVICE_LIB = 0
+endif
+
+ifeq ($(PROFILE),)
+  XTSC_PARAMS = $(XTSC_RUN_BINARY_DEF) \
+                --define=SHARED_RAM_L_NAME=SharedRAM_L.$$$$ \
+                --define=SYSTEM_RAM_L_NAME=SystemRAM_L.$$$$ \
+                --include=$(XTSC_INC_FILE)
+else
+  XTSC_PARAMS = --define=DSP_0_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_1_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=SHARED_RAM_L_NAME=SharedRAM_L.$$$$ \
+                --define=SYSTEM_RAM_L_NAME=SystemRAM_L.$$$$ \
+                $(XTSC_RUN_BINARY_DEF) \
+                --include=$(XTSC_INC_FILE)
+endif
+
+# Copy to host's filesystem
+setup: $(HOST_EXE) $(DEVICE_EXES) $(DEVICE_SRC_CL_FILES) $(INPUT_FILES)
+  # Copy the host application to the hosts's root filesystem
+	$(ADB) shell mkdir -p ${TARGET_DIR}/opencl
+	$(ADB) shell rm -rf ${TARGET_DIR}/opencl/*  
+	$(ADB) push $(HOST_LIBCPP_SHARED) ${TARGET_DIR}/opencl
+	$(ADB) push $(HOST_EXE) ${TARGET_DIR}/opencl
+	# Copy the kernel source CL files to the hosts's root filesystem
+	for T in $(DEVICE_SRC_CL_FILES) ; do \
+		$(ADB) push $$T ${TARGET_DIR}/opencl; \
+	done
+	# Copy the input files to the hosts's root filesystem
+	for T in $(INPUT_FILES) ; do \
+		$(ADB) push $$T ${TARGET_DIR}/opencl; \
+	done
+	# Copy the dynamic library
+	if [ $(COPY_DEVICE_LIB) -eq 1 ]; \
+  then \
+		$(ADB) push device.pkg.lib ${TARGET_DIR}/opencl; \
+	fi
+
+gen_start_xtsc_script:
+	echo "#!/bin/bash" > start_xtsc.sh
+	echo >> start_xtsc.sh
+	echo "function on_exit()" >> start_xtsc.sh
+	echo "{" >> start_xtsc.sh
+	echo '  [ -z "$$(jobs -p)" ] || kill $$(jobs -p)' >> start_xtsc.sh
+	echo '  echo "Removing these files:"' >> start_xtsc.sh
+	echo '  ls -la /dev/shm/S*RAM_L.$$$$' >> start_xtsc.sh
+	echo '  rm -f /dev/shm/S*RAM_L.$$$$' >> start_xtsc.sh
+	echo "}" >> start_xtsc.sh
+	echo >> start_xtsc.sh
+	echo "trap on_exit EXIT" >> start_xtsc.sh
+	echo >> start_xtsc.sh
+	chmod 755 start_xtsc.sh
+
+# Simulate turbo-mode
+xtsc-run-turbo: $(HOST_EXE) $(DEVICE_EXES) gen_start_xtsc_script
+	echo '$(XTSC_RUN) --set_xtsc_parm=turbo=true $(XTSC_PARAMS)' >> start_xtsc.sh
+	START_XTSC=./start_xtsc.sh emulator $(EMULATOR_PARAMS)
+
+# Simulate cycle-accurate mode
+xtsc-run: $(HOST_EXE) $(DEVICE_EXES) setup gen_start_xtsc_script
+	echo '$(XTSC_RUN) --set_xtsc_parm=turbo=false $(XTSC_PARAMS)' >> start_xtsc.sh
+	START_XTSC=./start_xtsc.sh emulator $(EMULATOR_PARAMS)
+
+clean::
+	rm -rf start_xtsc.sh

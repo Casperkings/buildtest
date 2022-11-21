@@ -1,0 +1,126 @@
+include ${TOP_DIR}/Makefile.common
+
+# XTSC include files for the device subsystem; the host is simulated on x86
+XTSC=xtsc-run.sim
+C_COMPILER=gcc
+
+MEM_LATENCY ?= 1
+
+# Conditionally add -L if using libraries from tools (eg: libfdt)
+ifneq ($(LIB64_PATH), )
+  L_LIB64 = -L$(LIB64_PATH)
+else
+  L_LIB64 =
+endif
+
+# Conditional add path to libfdt if externally defined
+ifneq ($(LIB_FDT_PATH), )
+  L_LIB_FDT = -L$(LIB_FDT_PATH)
+else
+  L_LIB_FDT =
+endif
+
+# Link flags used to compile the host application on x86. Includes the
+# host OpenCL runtime and host XRP
+HOST_LDFLAGS = \
+  -L$(XTENSA_OCL_RT)/host/lib \
+  -lxocl-host-rt-sim -lxdyn-lib-host-sim -lxrp-linux-sim -lpthread \
+  $(XTENSA_OCL_RT)/host/lib/xrp.dts.o \
+  $(L_LIB64) $(L_LIB_FDT) -lfdt -lrt -luuid -Wl,-rpath=$(LIB64_PATH)
+
+ifneq ($(XTENSA_PARAMS),)
+  XTSC_CORE_XTENSA_PARAMS = --define=DSP_0_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_1_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_2_XTENSA_PARAMS=\$(XTENSA_PARAMS) \
+                            --define=DSP_3_XTENSA_PARAMS=\$(XTENSA_PARAMS)
+else
+  XTSC_CORE_XTENSA_PARAMS =
+endif
+
+ifneq ($(DPREFETCH),)
+  XTSC_PREFETCH = --define=DSP_0_SIM_PREFETCH=\$(DPREFETCH) \
+                  --define=DSP_1_SIM_PREFETCH=\$(DPREFETCH) \
+                  --define=DSP_2_SIM_PREFETCH=\$(DPREFETCH) \
+                  --define=DSP_3_SIM_PREFETCH=\$(DPREFETCH)
+else
+  XTSC_PREFETCH =
+endif
+
+XTSC_RUN_BINARY_DEF = $(addprefix --define=,$(join \
+                        $(addsuffix _BINARY=,$(CORES)), $(DEVICE_EXES)))
+
+XTSC_MEM_LATENCY= --define=SHARED_RAM_L_DELAY=$(MEM_LATENCY) \
+                  --define=SYSTEMROM_DELAY=$(MEM_LATENCY)    \
+                  --define=SYSTEMRAM_DELAY=$(MEM_LATENCY)
+
+ifeq ($(PROFILE),)
+  XTSC_PARAMS = $(XTSC_CORE_XTENSA_PARAMS) $(XTSC_RUN_BINARY_DEF) $(XTSC_MEM_LATENCY) $(XTSC_PREFETCH) --include=$(XTSC_INC_FILE)
+else
+  XTSC_PARAMS = --define=DSP_0_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_1_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_2_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                --define=DSP_3_SIM_CLIENT_FILE=${XTENSA_OCL_RT}/Subsystem/${SUBSYSTEM}/$(XTSC)/profile.cmds \
+                $(XTSC_CORE_XTENSA_PARAMS) \
+                $(XTSC_MEM_LATENCY) \
+                $(XTSC_PREFETCH) \
+                $(XTSC_RUN_BINARY_DEF) --include=$(XTSC_INC_FILE)
+endif
+
+define run_pre
+	rm -rf run_sim.sh; \
+	cat ${TOP_DIR}/run_prologue.sh > run_sim.sh; \
+	echo "set -x" >> run_sim.sh; \
+	echo "./$(1) $(2) & pids[0]=\$$!" >> run_sim.sh; \
+	echo "sleep 1" >> run_sim.sh
+endef	
+
+define run_post
+	echo "set +x" >> run_sim.sh; \
+  echo "declare -i num=7200 # 5 hours: 3600*10/5" >> run_sim.sh; \
+	echo "while kill -0 \$${pids[0]} > /dev/null 2>&1 && kill -0 \$${pids[1]} > /dev/null 2>&1; do" >> run_sim.sh; \
+	echo "  sleep 5" >> run_sim.sh; \
+  echo "  let num=\$$num-1" >> run_sim.sh; \
+  echo "  if [ \$$num -eq 0 ]; then" >> run_sim.sh; \
+  echo "    echo \"Timeout...\"" >> run_sim.sh; \
+  echo "    break" >> run_sim.sh; \
+  echo "  fi" >> run_sim.sh; \
+	echo "done" >> run_sim.sh; \
+  echo "declare -i num=10" >> run_sim.sh; \
+	echo "while kill -0 \$${pids[0]} > /dev/null 2>&1; do" >> run_sim.sh; \
+  echo "  echo \"waiting for \$${pids[0]}\"" >> run_sim.sh; \
+  echo "  sleep 5" >> run_sim.sh; \
+  echo "  let num=\$$num-1" >> run_sim.sh; \
+  echo "  if [ \$$num -eq 0 ]; then" >> run_sim.sh; \
+  echo "    break" >> run_sim.sh; \
+  echo "  fi" >> run_sim.sh; \
+  echo "done" >> run_sim.sh; \
+  echo "declare -i num=10" >> run_sim.sh; \
+	echo "while kill -0 \$${pids[1]} > /dev/null 2>&1; do" >> run_sim.sh; \
+  echo "  echo \"waiting for \$${pids[1]}\"" >> run_sim.sh; \
+  echo "  sleep 5" >> run_sim.sh; \
+  echo "  let num=\$$num-1" >> run_sim.sh; \
+  echo "  if [ \$$num -eq 0 ]; then" >> run_sim.sh; \
+  echo "    break" >> run_sim.sh; \
+  echo "  fi" >> run_sim.sh; \
+  echo "done" >> run_sim.sh; \
+	chmod 755 run_sim.sh; \
+	./run_sim.sh; \
+	rm -rf run_sim.sh
+endef
+
+# Simulate turbo-mode
+xtsc-run-turbo: $(HOST_EXE) $(DEVICE_EXES)
+	$(call run_pre,$(HOST_EXE),$(HOST_CMD_ARGS))
+	@echo "$(XTSC_RUN) --set_xtsc_parm=turbo=true \
+                     --set_xtsc_parm=turbo_max_relaxed_cycles=10000000 \
+                     --define=SHARED_RAM_L_NAME=SharedRAM_L.\$${pids[0]} \
+              $(XTSC_PARAMS) & pids[1]=\$$!" >> run_sim.sh
+	$(call run_post)
+
+# Cycle accurate mode
+xtsc-run: $(HOST_EXE) $(DEVICE_EXES)
+	$(call run_pre,$(HOST_EXE),$(HOST_CMD_ARGS))
+	@echo "$(XTSC_RUN) --set_xtsc_parm=turbo=false \
+                     --define=SHARED_RAM_L_NAME=SharedRAM_L.\$${pids[0]} \
+              $(XTSC_PARAMS) & pids[1]=\$$!" >> run_sim.sh
+	$(call run_post)

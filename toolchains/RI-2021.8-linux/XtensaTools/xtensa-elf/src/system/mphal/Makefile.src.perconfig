@@ -1,0 +1,53 @@
+#  Makefile.src.perconfig - Per-core-config makefile for MP HAL
+#
+#  This file is always included by a small generated Makefile
+#  in the corresponding build subdirectory.
+#  The generated Makefile includes a generated Makefile.info and sets
+#  MAKEFILE_SRC (path to this makefile) before including this makefile.
+#
+# Copyright (c) 2001-2008 by Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+
+export XTENSA_CORE := $(notdir $(shell pwd))
+
+CONFIG_LIB_DIR = $(XTENSA_SYSTEM_ROOT)/xtensa-elf/config/$(XTENSA_CORE)/lib
+
+CFLAGS = -O2 -g -mlongcalls -I. -I$(XTENSA_SYSTEM_ROOT)/xtensa-elf/include
+
+MPHALLIB = libmphal.a
+OBJS = mphal.o
+
+#######  Rules start here  #######
+
+#  Default target (installs):
+all: $(MPHALLIB)
+	-$(call mkpath, $(CONFIG_LIB_DIR))
+	$(call cp, $(MPHALLIB), $(CONFIG_LIB_DIR))
+
+$(MPHALLIB): $(OBJS)
+
+#$(SPLIT_OBJS): %.o:
+#	$(CC_FOR_TARGET) -c $(CFLAGS) $(SPLIT_FLAGS) $(SPLIT_SOURCE) -D__SPLIT__$(SPLIT_TAG) -o $@
+
+%.o: %.S
+	$(CC_FOR_TARGET) -c $(CFLAGS) $(FLAGS_$*) -o $@ $<
+
+%.o: %.c
+	$(CC_FOR_TARGET) -c $(CFLAGS) $(FLAGS_$*) -o $@ $<
+
+%.a:
+	-$(call rm, $@)
+	$(AR_FOR_TARGET) -rs $@ $^
+
+clean:
+	-$(call rm, $(OBJS) $(MPHALLIB))
+
+
+include $(XTENSA_TOOLS_ROOT)/misc/rules.mk
+

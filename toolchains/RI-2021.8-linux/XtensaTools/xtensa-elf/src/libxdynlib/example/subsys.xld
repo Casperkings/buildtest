@@ -1,0 +1,36 @@
+- { construct: core, name: CORE0,
+    config: XRC_Vision_Q7_AO,
+    vecselect: 0,
+  }
+- { construct: core, name: CORE1,
+    config: XRC_Vision_Q7_AO,
+    vecselect: 0,
+  }
+- { construct: space, name: cc, description: 'common cache coherency controller (CC)',
+    sizem1: 4294967295,
+    attrs: { delay: 2 },
+  }
+- { construct: map,
+    space: CORE0.external, addressable: cc,
+    startaddr: 0,
+  }
+- { construct: map,
+    space: CORE1.external, addressable: cc,
+    startaddr: 0,
+  }
+- { construct: memory, name: sysram,
+    space: cc,
+    startaddr: 0x60000000, size: 0x20000000,
+    attrs: { device: 0, writable: 1 },
+  }
+- { construct: memory, name: sysrom,
+    space: cc,
+    startaddr: 0x50000000, size: 0x1000000,
+    attrs: { device: 0, writable: 0 },
+  }
+- { construct: options,
+    system_name: Test,
+    postxmap: ~,
+    create_local_memories: 1,
+    prexmap: ~,
+  }

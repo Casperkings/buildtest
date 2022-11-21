@@ -1,0 +1,60 @@
+---
+
+- { construct: core, name: CORE0,
+    config: XRC_Vision_Q7_2P,
+    vecselect: 0,
+  }
+- { construct: core, name: CORE1,
+    config: XRC_Vision_Q7_2P,
+    vecselect: 0,
+  }
+- { construct: space, name: cc, description: 'common cache coherency controller (CC)',
+    sizem1: 4294967295,
+    attrs: { delay: 2 },
+  }
+- { construct: segment,
+    addrspace: xipc_shared_buffer,
+    memory: xipc_shared_buffer,
+    startaddr: 0, endaddr: 16383,
+    partition: { shared: 100% },
+  }
+- { construct: segment,
+    addrspace: l2ram,
+    memory: l2ram,
+    startaddr: 0, endaddr: 1048575,
+    partition: { shared: 100% },
+  }
+- { construct: map,
+    space: CORE0.external, addressable: cc,
+    startaddr: 0,
+  }
+- { construct: map,
+    space: CORE1.external, addressable: cc,
+    startaddr: 0,
+  }
+- { construct: memory, name: l2ram, description: 'memory l2ram',
+    space: cc,
+    startaddr: 0x55600000, size: 1024K,
+    attrs: { device: 0, writable: 1 },
+  }
+- { construct: memory, name: sysram,
+    space: cc,
+    startaddr: 0x60000000, size: 520192K,
+    attrs: { device: 0, writable: 1 },
+  }
+- { construct: memory, name: sysrom,
+    space: cc,
+    startaddr: 0x50000000, size: 16M,
+    attrs: { device: 0, writable: 0 },
+  }
+- { construct: memory, name: xipc_shared_buffer,
+    space: cc,
+    startaddr: 0x7fffc000, size: 0x4000,
+    attrs: { device: 0, writable: 1 },
+  }
+- { construct: options,
+    system_name: Test,
+    postxmap: ~,
+    create_local_memories: 1,
+    prexmap: ~,
+  }

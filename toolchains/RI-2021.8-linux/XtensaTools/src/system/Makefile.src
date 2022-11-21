@@ -1,0 +1,35 @@
+#  Makefile for host files in MP system builds (invoked by Makefile.mbuild)
+#
+# Copyright (c) 2005-2008 by Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+#  Include generic definitions (gives us XTENSA_TOOLS_ROOT etc):
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+include $(XTENSA_TOOLS_ROOT)/src/system/mbuild-defs.mk
+# include $(XTENSA_SYSTEM_ROOT)/sys-defs.mk
+
+#SRCDIR ?= $(XTENSA_TOOLS_ROOT)/src/system
+#SUBDIRS = xtmp xtsc
+#SUBDIRS = xtsc-run
+
+JTAG_TOPOLOGY = $(XTENSA_SYSTEM_ROOT)/misc/jtag_topology.xml
+HW_CCMEMS     = $(XTENSA_SYSTEM_ROOT)/misc/cc_memories.txt
+
+#######  Rules start here  #######
+
+all: $(JTAG_TOPOLOGY) $(HW_CCMEMS)
+
+$(JTAG_TOPOLOGY): $(XTENSA_TOOLS_ROOT)/src/system/misc/jtag_topology.xml.tpp $(SOCFILE)
+	-$(call mkpath, $(@D))
+	$(SYSTPP) -x $(SOCFILE) -I $(XTENSA_TOOLS_ROOT)/lib/perl -o $@ $<
+
+$(HW_CCMEMS): $(XTENSA_TOOLS_ROOT)/src/system/misc/cc_memories.txt.tpp $(SOCFILE)
+	-$(call mkpath, $(@D))
+	$(SYSTPP) -x $(SOCFILE) -I $(XTENSA_TOOLS_ROOT)/lib/perl -o $@ $<
+
+include $(XTENSA_TOOLS_ROOT)/misc/rules.mk
+

@@ -1,0 +1,56 @@
+#  Makefile for XTMP host code in MP system builds
+#
+# Copyright (c) 2005-2006 by Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+#  Include generic definitions (gives us XTENSA_TOOLS_ROOT etc):
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+#  Get definitions useful for system builds:
+include $(XTENSA_TOOLS_ROOT)/misc/systemdefs.mk
+
+
+XTMP_MAIN   = $(XTENSA_SYSTEM_ROOT)/src/xtmp/xtmp.c
+XTMP_TARGET = $(XTENSA_SYSTEM_ROOT)/bin/xtmp
+XTMP_TMPDIR = $(XTENSA_SYSTEM_ROOT)/sld_xtmp
+
+CFLAGS = -O0 -g -Wall \
+	-I$(XTENSA_TOOLS_ROOT)/include \
+	-I$(XTENSA_TOOLS_ROOT)/xcl/src
+
+#	$(XTENSA_TOOLS_ROOT)/lib/iss/qt_driver.so
+XTMP_TARGET_LIBS = \
+	-L$(XTENSA_TOOLS_ROOT)/lib/iss \
+	-L$(XTENSA_TOOLS_ROOT)/lib \
+	-L$(XTENSA_STANDARD_TOOLS)/lib \
+	-Wl,-rpath -Wl,$(XTENSA_TOOLS_ROOT)/lib/iss \
+	-Wl,-rpath -Wl,$(XTENSA_TOOLS_ROOT)/lib \
+	-Wl,-rpath -Wl,$(XTENSA_STANDARD_TOOLS)/lib \
+	-lxtmp -lsimxtcore -llog4xtensa -lqt
+
+#######  Rules start here  #######
+
+#  Default target:
+all: $(XTMP_TARGET)
+
+
+$(XTMP_MAIN): $(SOCFILE)
+	@echo Generating XTMP model sources using SLD compiler...
+	$(MKPATH) $(@D)
+	$(MKPATH) $(XTMP_TMPDIR)
+	$(SLD) --sysroot=$(XTENSA_SYSTEM_ROOT) --root=$(XTMP_TMPDIR) --sysgen --xtmp --XTMP:output=$@ $(SOCFILE)
+	-rm -rf $(XTMP_TMPDIR)
+
+$(XTMP_TARGET): $(XTMP_MAIN) qt_driver.o
+	$(MKPATH) $(@D)
+	$(CC) $(CFLAGS) $^ $(XTENSA_TOOLS_ROOT)/xcl/src/xtmp_support.c -o $@ $(XTMP_TARGET_LIBS)
+
+qt_driver.o: $(XTENSA_TOOLS_ROOT)/src/iss/qt_driver.c
+	$(CC) -c $(CFLAGS) -DUSING_THREAD_HEAP=1 $< -o $@
+
+
+include $(XTENSA_TOOLS_ROOT)/misc/rules.mk
+

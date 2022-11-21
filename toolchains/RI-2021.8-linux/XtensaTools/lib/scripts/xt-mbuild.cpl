@@ -1,0 +1,785 @@
+#!perl -w
+# +----------------------------------------------------------------+
+# |   Copyright (c) 2000-2018 Tensilica Inc.  ALL RIGHTS RESERVED. |
+# |                                                                |
+# |   These coded instructions, statements, and computer programs  |
+# |   are the copyrighted works and confidential proprietary       |
+# |   information of Tensilica Inc.  They may not be modified,     |
+# |   copied, reproduced, distributed, or disclosed to third       |
+# |   parties in any manner, medium, or form, in whole or in part, |
+# |   without the prior written consent of Tensilica Inc.          |
+# +----------------------------------------------------------------+
+#
+#  Title: 	Top-level Multi-Core System generator/Builder driver
+#
+#  $Id: //depot/rel/Homewood/ib.8/Xtensa/Software/misc/xt-mbuild.pl#1 $
+use strict;
+use Config;
+use Carp;
+use Cwd;
+use Getopt::Long;
+use File::Basename;
+use File::Spec;
+use File::Spec::Functions;
+use File::Copy;
+use File::Path;
+use FileHandle;
+#use IPC::Locker;
+use Sys::Hostname;
+use Text::Wrap qw(wrap);
+use FindBin qw/$Bin/;
+
+#---------------------------------------------------------------------------
+#			--- As set by the perl wrapper ---
+#---------------------------------------------------------------------------
+
+    my $argv0 = $ENV{'ARGV0'};
+    my $xtensa_tools_root = $ENV{'XTENSA_TOOLS_ROOT'};
+    my $tools = $ENV{'XTENSA_STANDARD_TOOLS'};
+
+#---------------------------------------------------------------------------
+#			--- Global Variables ---
+#---------------------------------------------------------------------------
+
+    fileparse_set_fstype($^O);
+    $argv0 = $0 unless defined($argv0);
+    my ($myname, $mypath) = fileparse($argv0);
+    $mypath = File::Spec->rel2abs($mypath);
+
+    my $archname = $Config{archname};
+    $archname =~ s/-thread.*//;		# for the perl that's on Fedora 3... (5.8.5)
+    $archname =~ s/^i\d86/x86/;		# perl Config module should have done this...
+    my $windows = ($^O =~ /win/i) && ($^O !~ /darwin/i);
+    my $s = (($windows && $^O !~ /cygwin/i) ? "\\" : '/');	# directory separator
+#print STDERR "*********** archname=$archname os=$^O (windows=$windows) ***********\n";
+
+    srand(time());			# seed the random number generator
+
+    #  Note the conspicuous absence of references to Tensilica Standard Tools
+    #  (StdTools, or /usr/xtensa/stools-#.#).  These are a superset of the
+    #  Tools (/usr/xtensa/tools-#.#, which used to be called Xtensa Tools but
+    #  that's now ambiguous because customer-side software tools are now also
+    #  called Xtensa Tools).  This superset is only used for internal builds.
+    #  This script runs customer-side, where StdTools is not available.
+
+    #my $root = File::Spec->catdir($ENV{'HOME'}, '3.0');
+    my $curdir = cwd();
+    croak "Error: current directory cannot contain spaces" if $curdir =~ /\s/;
+    my $logfile;
+    my $root;
+    my $ten = 0;
+    my $do_nothing = 0;
+    my $clean = 0;
+    my $preclean = 0;
+#    my ($check, $lock) = (1, 1);
+    my ($parallel, $internal) = (1, 1);
+    my ($help, $swtools, $tctools, $socfile);
+    my ($xtensa_system);
+#    my ($component, $unit, $xtunit) = ("Barcelona", undef, 0);
+    my $seed = 1;
+    my ($syspkg_dir, $sysbuild_dir, $build_dir);
+    my (@builds, @defs, @lsplist);
+    my $cmdline = join(' ', @ARGV);
+
+#---------------------------------------------------------------------------
+#			 --- Parse Options ---
+#---------------------------------------------------------------------------
+    my %options = (
+		   "help"       => \$help,
+		   "root=s"     => \$root,
+		   "socfile=s"  => \$socfile,
+#		   "component=s"=> \$component,
+#		   "unit=s"     => \$unit,
+		   "clean!"     => \$clean,
+		   "preclean!"  => \$preclean,
+#		   "check!"     => \$check,
+#		   "lock!"      => \$lock,
+		   "ten!"       => \$ten,
+		   "n!"         => \$do_nothing,
+		   "logfile=s"  => \$logfile,
+		   "swtools=s"  => \$swtools,
+		   "tctools=s"  => \$tctools,
+#		   "stools=s"	=> \$stools,
+		   "tools=s"    => \$tools,
+		   "sysbuild=s" => \$sysbuild_dir,
+		   "syspkg=s"   => \$syspkg_dir,
+		   "registry=s" => \$xtensa_system,
+		   "xtensa-system=s" => \$xtensa_system,
+		   "build=s@"   => \@builds,
+		   "def=s@"     => \@defs,
+		   "lsps=s@"	=> \@lsplist,
+		   "internal!"  => \$internal,
+		   );
+    my $ge = GetOptions(%options);
+
+#---------------------------------------------------------------------------
+#		       --- Print Help Message ---
+#---------------------------------------------------------------------------
+    if (defined $help) {
+	print <<END_OF_MESSAGE;
+
+    Usage: $myname [options]
+
+    Generates a system package from the given XML system ("SOC") description.
+
+    Option summary:
+
+        -help           - print this message
+        -socfile <soc>  - name of XML configuration file to use.  Can be
+                          relative, absolute, or from <root>/p4root/Config/Systems.
+                          This option is required for doing anything useful.
+                          Extension is .xsys .
+        -build target   - build the specified top-level Makefile target(s)
+                          (separated by commas with no whitespace).
+                          Currently <target> can be:
+                             sw (default), hw, or populate.
+                          You can use this option multiple times.
+        -def NAME=VALUE - define a Makefile macro seen by all Makefiles
+                          (by placing its definition in the top-level Makefile.info)
+        -lsps lsp[,...] - specify comma-separated list of standard LSPs to build
+                          instead of the default set (need sim for test to pass)
+END_OF_MESSAGE
+
+	print <<END_OF_MESSAGE if 0;
+        -swoptions opt  - NOT IMPLEMENTED
+        -component name - NOT IMPLEMENTED?? name of the hardware component to build.
+                          Valid choices are Barcelona and Mercury.
+                          The default component is Barcelona.
+        -unit name      - NOT IMPLEMENTED?? name of the unit under test for unit-level
+                          verification.  For example PIFreg, PIFConnect
+                          PIFsramc.   Only works for units that are part
+                          of Mercury.
+END_OF_MESSAGE
+
+	print <<END_OF_MESSAGE;
+
+    Directory options:
+
+        -root dir       - root of your tree (see below). Defaults to
+                          current working directory.  FIXME ???
+                          (if swtools path ends in XtensaTools or swtools-*,
+                          should default root be just above that?)
+                          (should default be two directories above where
+                          this executable is located? see -swtools)
+        -swtools dir    - where to find the software tools (or customer's
+                          Xtensa Tools).  Defaults to the directory above
+                          the /libexec/ subdirectory in which this executable
+                          is located (warning if not in /libexec/ or /bin/).
+        -tctools dir    - where to find the TIE compiler.
+                          cust:  defaults to <swtools>/TIE
+                          -ten:  defaults to <root>/tctools-<arch>
+        -tools dir      - where to find the customer standard tools.
+                          Defaults to <swtools>/Tools
+        -syspkg dir     - where to install the system package that contains
+                          the generated system hardware and/or software
+                          (ie. configured system files).
+                          Defaults to <root>/sys-<arch>/<soc>/package
+        -sysbuild dir   - build directory for generating the system package.
+                          Defaults to <root>/sys-<arch>/<soc>/build
+        -registry dir   - Xtensa core registry directory where the parameter
+                          files for all cores specified in the system (if any)
+                          can be found.  Defaults to <swtools>/config
+                          (or first directory specified in XTENSA_SYSTEM??).
+                          (The relevant core packages must have already been
+                          built and installed.)
+
+    Miscellaneous options:
+
+        -preclean       - Remove the sysbuild and syspkg directories
+                          (or app directory) before the build.  This option is
+                          turned off by default.
+        -clean          - Remove the sysbuild directory if the build succeeds.
+                          THIS CHECK NOT IMPLEMENTED: xt-mbuild (WILL ONE DAY) runs a
+                          simple program on the ISS to determine whether the
+                          build succeeded.  This option is turned off by default.
+                          This option is enabled automatically
+                          if you put sysbuild in /tmp.
+        -ten            - Use Tensilica-internal defaults for directory structure.
+        -[no]internal   - By default ybuild will build your tree for
+                          internal development (i.e., set TEN4_INTERNAL).
+                          You can change this behavior by using the
+                          -nointernal flag.
+        -logfile file   - log all output to <file>.
+END_OF_MESSAGE
+	exit;
+    }
+
+    if (@ARGV) {
+	print "Error: unknown argument @ARGV\n";
+	print "Use -help option for usage information.\n";
+	exit 1;
+    }
+
+#---------------------------------------------------------------------------
+#		    --- Clean-up the Environment ---
+#---------------------------------------------------------------------------
+
+    # Recommended by various environmental organisations for a
+    # healthy and sustainable ecology.  KEEP THE ENVIRONMENT CLEAN!
+    #
+    # Remove definition of various environment variables,
+    # otherwise configcheck and other things can fail.
+    # Note: PATH gets cleared/set by the Makefile.
+
+    # Generic things:
+    delete $ENV{'SHELL'};
+    delete $ENV{'MAKEFILES'};	# evil polluter, never define this!
+    delete $ENV{'MAKEFLAGS'};
+    delete $ENV{'MAKE_MODE'};
+    delete $ENV{'CFLAGS'};
+    # Tensilica specific things:
+    delete $ENV{'BFM_BLD_DIR'};
+    delete $ENV{'CONFIG'};
+    delete $ENV{'CONFIG_CF'};
+    delete $ENV{'CONFIG_DEPEND'};
+    delete $ENV{'CONFIG_SR'};
+    delete $ENV{'DESTDIR'};
+    delete $ENV{'DISTCC_HOSTS'};
+    delete $ENV{'INTERNAL_TOOLS'};
+    delete $ENV{'PREFIX'};
+    delete $ENV{'STDTOOLS'};
+    delete $ENV{'SWCONFIG'};
+    delete $ENV{'SWTOOLS'};
+    delete $ENV{'TARGET_DIR'};
+    delete $ENV{'TCTOOLS'};
+    delete $ENV{'TEN4_INTERNAL'};
+    delete $ENV{'TEN4_ROOT'};
+    delete $ENV{'TENSILICA_TOOLS'};
+    delete $ENV{'UNIT'};
+    delete $ENV{'UNIT_HIER_INSTNAME'};
+    delete $ENV{'VHDL_BUILD'};
+    delete $ENV{'XBUILD'};
+    delete $ENV{'XTENSA_CC_FOR_TARGET'};
+    delete $ENV{'XTENSA_CXX_FOR_TARGET'};
+    delete $ENV{'XTENSA_TOOLS'};
+    delete $ENV{'XTTOOLS'};
+    delete $ENV{'YBUILDDIR'};
+    delete $ENV{'YBUILDSEED'};
+    #  Customer-side Tensilica specific things:
+    delete $ENV{'XTENSA_CORE'};
+    delete $ENV{'XTENSA_PARAMS'};
+    #delete $ENV{'XTENSA_SYSTEM'};	# done further below, after use
+    delete $ENV{'XTENSA_TOOLS_ROOT'};
+    delete $ENV{'XTENSA_ROOT'};
+    delete $ENV{'XTENSA_STANDARD_TOOLS'};
+    delete $ENV{'XTENSA_TIE_TOOLS'};
+    delete $ENV{'ARCH'};
+    delete $ENV{'HOSTTYPE'};
+
+    $ENV{'TEN4_INTERNAL'} = "1" if $internal;	# do this early, so everything sees it
+
+    #  Check for HOME, in case any sub-process looks at it (e.g. to expand ~ paths
+    #  passed to xt-mbuild):
+    if ($windows) {
+	if (!defined($ENV{'HOME'}) and defined($ENV{'HOMEPATH'})) {
+	    #  If HOMEPATH is a UNC path (e.g. \\machine\some\path),
+	    #  HOMEDRIVE is not set, and that's normal.
+	    my $homedrive = defined($ENV{'HOMEDRIVE'}) ? $ENV{'HOMEDRIVE'} : "";
+	    $ENV{'HOME'} = $homedrive . $ENV{'HOMEPATH'};
+	}
+    }
+    if (!defined($ENV{'HOME'}) or $ENV{'HOME'} eq "") {
+	$ENV{'HOME'} = $curdir;
+	#  Do we really care enough to even emit this warning?:
+	print STDERR "WARNING: could not determine HOME directory, ".
+		"using current directory instead ($curdir)\n";
+    } elsif ($ENV{'HOME'} =~ /\s/) {
+	$ENV{'HOME'} = $curdir;
+	#  Do we really care enough to even emit this warning?:
+	print STDERR "WARNING: HOME directory contains spaces, ".
+		"using current directory instead ($curdir)\n";
+    }
+    croak "Error: TMP cannot contain spaces"
+	if (defined $ENV{'TMP'} && $ENV{'TMP'} =~ /\s+/);
+
+    #  IMPORTANT:  The following variables must NOT be defined in
+    #  either the Makefiles or the environment (especially customer-side):
+    #
+    #	CONFIG
+    #	SWTOOLS
+    #	TCTOOLS
+    #	TENSILICA_TOOLS
+    #	XTENSA_TOOLS
+    #	XTTOOLS
+    #
+    #	BFM_BLD_DIR
+    #	CONFIG_CF
+    #	CONFIG_DEPEND
+    #	CONFIG_SR
+    #	DISTCC_HOSTS
+    #	INTERNAL_TOOLS
+    #	PREFIX
+    #	SOURCE_DIR
+    #	STDTOOLS
+    #	SWCONFIG
+    #	TARGET_DIR
+    #	TEN4_ROOT
+    #	UNIT_HIER_INSTNAME
+    #	VHDLBUILD
+    #	XBUILD
+    #	XTENSA_CC_FOR_TARGET
+    #	XTENSA_CORE
+    #	XTENSA_CXX_FOR_TARGET
+    #	YBUILDDIR
+    #	YBUILDSEED
+
+
+#---------------------------------------------------------------------------
+#		      --- Decide What to Build ---
+#---------------------------------------------------------------------------
+
+    #  FIXME: also build hw by default if no TDK present (and ...?).
+    @builds = ("sw") unless @builds;	# default: build software only
+    @builds = map(split(',', $_), @builds);
+    @builds = map("\L$_", @builds);	# force lowercase
+    #  We might try enforcing build order, but Makefile can do that just fine with dependencies??
+    #  (FIXME: not sure)
+#    #my @valid_builds = (qw/sw hw xplode construct xtmp xtsc/);
+#    my %build = map {$_ => 0} @valid_builds;
+#    foreach my $name (@builds) {
+#	if (! grep($name eq $_, @valid_builds)) {
+#	    die "Error: -build $name is not a valid option\n"
+#	       ."Error: Valid values include: ".join(", ",@valid_builds)."\n";
+#	}
+#	$build{$name} = 1;
+#    }
+#    #  Recompute @builds in proper order and with proper case:
+#    @builds = grep($build{$_}, @valid_builds);
+
+
+#---------------------------------------------------------------------------
+#			--- Compute Defaults ---
+#---------------------------------------------------------------------------
+
+    #  Determine XTENSA_TOOLS_ROOT ($swtools):
+    if (!defined($swtools)) {
+	my $path = $mypath;
+	if ($path !~ s|^(.*?)[/\\]+(\w+)[/\\]*$||) {
+	    croak "Error: could not determine <swtools> from invocation path: $mypath\n"
+	    	. "Error: please specify -swtools";
+	}
+	$swtools = $1;
+	my $dirname = $2;
+	print STDERR "WARNING: expected $myname in libexec/ or bin/ subdirectory of swtools;\n"
+		   . "WARNING: found here instead: $mypath\n"
+		   unless $dirname eq "libexec" or $dirname eq "bin";
+    }
+    $swtools = cleanmeup($swtools, "swtools path");
+    croak "Error: swtools: not a directory: $swtools"
+	unless -d $swtools;
+
+    if (!defined($root)) {
+	my $path = $swtools;
+	if ($path =~ s|[/\\]XtensaTools[^/\\]*$||) {
+	    $root = $path;
+	    #$ten = 0;
+	} elsif ($path =~ s|[/\\]swtools[^/\\]*$||) {
+	    $root = $path;
+	    $ten = 1;
+	}
+    }
+    $root = cleanmeup($root, "root path") if defined($root);
+#    croak "Error: please specify -root"
+#	unless defined($root);
+
+    #  Check the list of registry paths (xtensa_system):
+    if (!defined($xtensa_system) and defined($ENV{"XTENSA_SYSTEM"})) {
+	$xtensa_system = $ENV{"XTENSA_SYSTEM"};
+	#$xtensa_system =~ s/:.*//;	# only use the first path
+    }
+    $xtensa_system = catdir($swtools, 'config') unless defined($xtensa_system);
+    #  XTENSA_SYSTEM and XTENSA_PARAMS always split on ';' (semi-colon) regardless of host:
+    my @xtensa_syspaths = split(';', $xtensa_system);
+    foreach my $syspath (@xtensa_syspaths) {
+      $syspath = cleanmeup($syspath, "xtensa_system");
+      croak "Error: xtensa_system: not a directory: $syspath"
+	unless -d $syspath;
+    }
+    $xtensa_system = join(';', @xtensa_syspaths);
+    delete $ENV{'XTENSA_SYSTEM'};	# for a clean environment
+
+    croak "Error: please specify -tctools or -root or not -ten"
+	unless !$ten or defined($tctools) or defined($root);
+    $tctools = $ten ? catdir($root, 'tctools') : catdir($swtools, "TIE")
+	unless defined($tctools);
+    $tctools = cleanmeup($tctools, "tctools path");
+    croak "Error: tctools: not a directory: $tctools"
+	unless -d $tctools;
+
+    $tools = catdir($swtools, "Tools")
+	unless defined($tools);
+    $tools = cleanmeup($tools, "Tensilica tools path");
+    croak "Error: tools: not a directory: $tools"
+	unless -d $tools;
+
+#    $socfile = cleanmeup($syspkg_dir, "syspkg path") . "/config/system.xsys"
+#	if $app and defined($syspkg_dir) and !defined($socfile);
+    croak "Need more input!  More data!  More data!  Gimme a system configuration!\n"
+	 ."Error: please specify the -socfile option\n"
+	unless defined $socfile;
+    if ( $socfile !~ m|^[/\\]| and -r "./$socfile" ) {
+	$socfile = File::Spec->catdir($curdir, $socfile);
+    } elsif ( $socfile !~ m|^[/\\]| and $socfile !~ /\.xsys$/ and -r "./${socfile}.xsys" ) {
+	$socfile .= ".xsys";
+	$socfile = File::Spec->catdir($curdir, $socfile);
+    } elsif (! -r $socfile) {
+	$socfile .= ".xsys" unless $socfile =~ /\.xsys$/;
+	if (! -r $socfile) {
+	    croak "Error: could not find SOC file '$socfile' and -root not specified"
+		    unless defined($root);
+	    my $p4soc = catfile($root, "p4root", "Config", "Systems", $socfile);
+	    if (-r $p4soc) {
+		$socfile = $p4soc;
+	    } else {
+		croak "Error: could not find SOC file '$socfile'";
+	    }
+	}
+    }
+    $socfile = cleanmeup($socfile, "SOC file path");
+    my $socname = $socfile;
+    $socname =~ s/\.xsys$//;
+    $socname =~ s|.*[/\\]||;
+    #my ($socname, $socpath) = fileparse($socfile, '\.xsys');
+
+    croak "Error: please specify -sysbuild or -root"
+	unless defined($sysbuild_dir) or defined($root);
+    $sysbuild_dir = catdir($root, "sys-${archname}", $socname, "build")
+	unless defined($sysbuild_dir);
+    $sysbuild_dir = cleanmeup($sysbuild_dir, "sysbuild path");
+    $build_dir = $sysbuild_dir;
+
+    $clean = ($build_dir =~ m@^/tmp/@) ? 1 : 0 unless defined $clean;
+
+    croak "Error: please specify -syspkg or -root"
+	unless defined($syspkg_dir) or defined($root);
+    $syspkg_dir = catdir($root, "sys-${archname}", $socname, "package")
+    	unless defined($syspkg_dir);
+    $syspkg_dir = cleanmeup($syspkg_dir, "syspkg path");
+
+    #  Check whether a specific subset of LSPs to generate was specified:
+    my %lsps = ();
+    foreach (@lsplist) {
+      foreach my $lsp (split(/,/,$_)) {
+	$lsp =~ /['"$`]/ and croak "Error: invalid characters in LSP name '$lsp' in -lsps option (cannot have quotes or '\$' or spaces)";
+	$lsps{$lsp} = 1;
+      }
+    }
+    @lsplist = sort keys %lsps;
+    #  This option is passed down to xt-regenlsps for each core:
+    my $lsps_options = (@lsplist ? "-mlsp=".join(",",@lsplist) : "");
+
+    my $user = (defined $ENV{'USER'}) ? $ENV{'USER'} :
+	(defined $ENV{'LOGNAME'}) ? $ENV{'LOGNAME'} : 'noname';
+
+    #  --- Open Log Files ---
+    if (defined $logfile) {
+	# make sure directory exists
+	my $dir = dirname($logfile);
+	mkpath($dir);
+	# open a file handle to log stdout and stderr to
+	open(LOG, ">$logfile") ||
+	    croak "Error: failed to open log file $logfile";
+	open(STDOUT, ">&LOG") || croak "$!: could not redirect STDOUT";
+	open(STDERR, ">&LOG") || croak "$!: could not redirect STDERR";
+    }
+#    LOG->autoflush(1);
+#    print LOG "ybuild log\n";
+#    LOG->autoflush(0);
+
+    my $make;
+#    if ($windows) {
+#	$make = File::Spec->catfile($swtools, 'bin', 'xt-make');
+#    } else {
+	$make = File::Spec->catfile($tools, 'bin', 'make');
+#    }
+
+    # get seed value
+#    $seed = set_variable('seed', 1, \$estring, 0);
+#    $seed = ((time() >> rand(10))  ^ (($$ << 13) | $$)) unless $seed;
+
+    #
+    # For now destination package should not be the place where we
+    # do builds because we get a Makefile or other conflict:
+    #
+    if ($build_dir eq $syspkg_dir) {
+	croak "Error: don't set sysbuild_dir and syspkg_dir to the same value";
+    }
+
+
+#---------------------------------------------------------------------------
+#			   --- Setup Path ---
+#---------------------------------------------------------------------------
+    my @extra_paths = ();
+    my $pathsep = ':';		# FIXME: use ';' in Windows
+    if ($^O eq 'solaris') {
+	@extra_paths = ('/usr/bin', '/bin', '/usr/ccs/bin');
+    } elsif ($^O =~ /cygwin/i) {
+	my $sysroot;
+	open(CYGPATH, "cygpath -u \"$ENV{'SYSTEMROOT'}\" |")
+	    || die "Error: $! cygpath -u \"$ENV{'SYSTEMROOT'}\"";
+	chomp($sysroot = <CYGPATH>);
+	close CYGPATH;
+	@extra_paths = ('usr/bin', '/bin', "$sysroot/system32", $sysroot);
+    } elsif ($windows) {
+	#  Windows native:
+	$pathsep = ';';
+	@extra_paths = ("\$(XTENSA_TOOLS_ROOT)\\lib\\iss",
+			$ENV{'SYSTEMROOT'}."\\system32",
+			$ENV{'SYSTEMROOT'},
+			$tools."\\perl\\bin\\MSWin32-x86");
+    } else {
+	#  Unix:
+	@extra_paths = ('/usr/bin', '/bin');
+    }
+    my $makepath = join($pathsep, '$(XTENSA_TOOLS_ROOT)'.$s.'bin', @extra_paths);
+    $ENV{'PATH'} = join($pathsep, $swtools.$s.'bin', @extra_paths);
+    if ($^O =~ /cygwin/i) {
+	$ENV{'MAKE_MODE'} = 'UNIX';
+    }
+
+
+#---------------------------------------------------------------------------
+#		      --- Print Option Summary ---
+#---------------------------------------------------------------------------
+
+    my $show_hostname = hostname();
+    my $show_internal = ($internal) ? 'yes' : 'no';
+    my $show_cmdline = wrap('', '                ', $cmdline);
+    my $show_root = defined($root) ? $root : "(undefined)";
+    my $show_make_targets = join(" ", @builds);
+    my $show_defs = join("\n                ", map("'$_'", @defs));
+
+    print <<END_OF_SUMMARY;
+
+ ============================================================
+                   xt-mbuild option summary
+ ============================================================
+
+ System Configuration (SOC)
+    Name      : $socname
+    File      : $socfile
+
+ Directories
+    Sys Packg : $syspkg_dir
+    Sys Build : $build_dir
+    Software  : $swtools
+    Tools     : $tools
+    TIE Tools : $tctools
+    Root      : $show_root
+
+ Miscellaneous
+    Targets   : $show_make_targets
+    Hostname  : $show_hostname
+    Host Arch : $archname
+    Internal  : $show_internal
+    Defs      : $show_defs
+    PATH      : $ENV{'PATH'}
+
+ Command Line
+    Arguments : $show_cmdline
+ ============================================================
+
+
+END_OF_SUMMARY
+#    my $showunit = defined($unit) ? $unit : '-- N/A --';
+#    my $showxtunit = ($xtunit) ? 'Yes' : 'No';
+#    Component : $component
+#    Unit      : $showunit
+#    XtUnit    : $showxtunit
+#    Seed      : $seed
+
+    flush_output();
+
+    if ($do_nothing) {
+	print "-n option specified, nothing done.\n";
+	exit 0;
+    }
+
+
+#---------------------------------------------------------------------------
+#			  --- Setup Build Tree ---
+#---------------------------------------------------------------------------
+
+    if ($preclean) {
+	print "Deleting build and package trees ...\n";
+	rmtree ($sysbuild_dir);
+	rmtree ($syspkg_dir);
+    }
+
+    my $year = 1900 + (localtime)[5];
+    my $fulldate = localtime;
+
+    my $make_header = <<END_OF_HEADER;
+# +----------------------------------------------------------------+
+# |   Copyright (c) 2000-$year Tensilica Inc.  ALL RIGHTS RESERVED. |
+# |                                                                |
+# |   These coded instructions, statements, and computer programs  |
+# |   are the copyrighted works and confidential proprietary       |
+# |   information of Tensilica Inc.  They may not be modified,     |
+# |   copied, reproduced, distributed, or disclosed to third       |
+# |   parties in any manner, medium, or form, in whole or in part, |
+# |   without the prior written consent of Tensilica Inc.          |
+# +----------------------------------------------------------------+
+
+# +----------------------------------------------------------------+
+# |                                                                |
+# | This file was automatically generated by mbuild                |
+# | on $fulldate.  Do not edit.                     |
+# |                                                                |
+# +----------------------------------------------------------------+
+
+END_OF_HEADER
+
+    print "Creating makefiles under $build_dir ...\n";
+
+    mkpath($build_dir);
+
+    #  Now create the system package specific Makefile fragment.
+
+    my $make_info = File::Spec->catfile($build_dir, 'Makefile.info');
+    open(MAKE, ">$make_info") || die "$!: $make_info";
+    print MAKE $make_header;
+    print MAKE <<END_OF_MAKE;
+ARCH                   := $archname
+SRC_SOCFILE            := $socfile
+SOCNAME                := $socname
+XTENSA_TOOLS_ROOT      := $swtools
+XTENSA_SYSTEM_ROOT     := $syspkg_dir
+SET_MAKEFILE_INFO      := include $make_info
+SRC_BASEDIR            := \$(XTENSA_TOOLS_ROOT)
+XTENSA_SYSTEM_ORIG     := $xtensa_system
+MBUILD_LSPS_OPTIONS    := $lsps_options
+export PATH            := $makepath
+END_OF_MAKE
+
+    print MAKE "XTENSA_SYSTEM_BUILD    := $sysbuild_dir\n";
+    #  Only set those if needed.  They are really for internal use only.
+    #  Customer-side, they should never be needed.
+    print MAKE "XTENSA_TIE_TOOLS       := $tctools\n" if $tctools ne "$swtools/TIE";
+    print MAKE "XTENSA_STANDARD_TOOLS  := $tools\n"   if $tools ne "$swtools/Tools";
+
+    print MAKE "export TEN4_INTERNAL   := 1\n"       if $internal;
+   #print MAKE "export UNIT            := $unit\n"   if defined $unit;
+   #print MAKE "XT_UNIT_VERIF          := $xtunit\n" if defined $unit;
+    if (@defs) {
+	print MAKE "\n# User-provided macro definitions:\n";
+	foreach (@defs) {
+	    /^([\.\w]+)\s*([\:\+\?]?=)\s*(.*)$/
+		or croak "Error: unrecognized macro definition '$_'\n"
+			."Error: macro definition must be of the form:  -def NAME=VALUE\n"
+			."Error: where NAME is an identifier.";
+	    print MAKE "$1 $2 $3\n";
+	}
+    }
+    print MAKE "\n";
+    close MAKE;
+
+    #  Maybe:
+    #export COMPONENT       := $component
+
+    #  And create the system package top-level Makefile:
+
+    my $makefile = File::Spec->catfile($build_dir, 'Makefile');
+    open(MAKE, ">$makefile") || die "$!: $makefile";
+    print MAKE $make_header;
+    print MAKE "include Makefile.info\n";
+    print MAKE "include \$(XTENSA_TOOLS_ROOT)/src/system/Makefile.mbuild\n";
+    close(MAKE) || die "$!: $makefile";
+
+
+#---------------------------------------------------------------------------
+#			  --- Build Targets ---
+#---------------------------------------------------------------------------
+
+#    print "Creating directory $syspkg_dir\n";
+#    mkpath($syspkg_dir, 0, 0755);
+
+    if (@builds) {
+	print "Building system ...\n";
+	chdir($build_dir);
+	my @make_cmd = ($make, '-C', $build_dir, @builds);
+	# '-j', $parallel
+	# '--no-print-directory'
+	my_exec('syspkg build', @make_cmd);
+	chdir($curdir);
+	# Remove build directory (if we need to):
+	rmtree ($build_dir) if $clean;
+    }
+
+
+    print "MBUILD COMPLETE.\n";
+    close LOG if defined $logfile;
+    exit 0;
+
+
+
+#---------------------------------------------------------------------------
+#--------------------   SUBROUTINES   --------------------------------------
+#---------------------------------------------------------------------------
+
+
+sub flush_output {
+    my $save_autoflush = $|;
+    $| = 1;
+    print "";
+    $| = $save_autoflush;
+}
+
+
+#---------------------------------------------------------------------------
+#			--- Execute Command ---
+#---------------------------------------------------------------------------
+sub my_exec {
+    my ($msg, @cmd) = @_;
+    print "-----\n@cmd\n-----\n";
+    flush_output();
+    my @start = (time, (times)[2..3]);
+    my $result = system(@cmd);
+    my @end = (time, (times)[2..3]);
+    my @etimes = ($end[0] - $start[0],
+		  $end[1] - $start[1],
+		  $end[2] - $start[2]);
+    print  "-----\n";
+    print  "Execution time ($msg)\n";
+    printf "     Wall time: %.2fs\n", $etimes[0];
+    printf "     User time: %.2fs\n", $etimes[1];
+    printf "   System time: %.2fs\n", $etimes[2];
+    print  "-----\n";
+    flush_output();
+    $! = 1;	# exit code 1 on error
+    $result and croak "YError: $msg failed (return code $result)";
+    @etimes;
+}
+
+#---------------------------------------------------------------------------
+#		    --- Cleanup Directory Name ---
+#---------------------------------------------------------------------------
+sub cleanmeup {
+    my ($path, $what) = @_;
+    if ($^O =~ /cygwin/) {
+	$path = `cygpath -u \'$path\'`;
+	chomp($path);
+    }
+    $path = File::Spec->canonpath(File::Spec->rel2abs($path));
+
+    #  Check that path doesn't contain any funny characters:
+    $path =~ /\s/ and croak "Error: $what cannot contain spaces: $path";
+    $path =~ /['"`]/ and croak "Error: $what cannot contain quotes: $path";
+    $path =~ /[<>|*?\[\]\$\!\@\#\%\&\(\)\{\}\^\x00-\x1f]/
+	and croak "Error: $what cannot contain shell-special or control characters: $path";
+
+    return $path;
+}
+
+#---------------------------------------------------------------------------
+#		   --- Create Directory (w/ path) ---
+#---------------------------------------------------------------------------
+#sub mymkpath {
+#    my ($path,$verbose,$mode) = @_;
+#    return if -d $path;
+#    my @paths = mkpath($path, $verbose, $mode);
+#    mydie ("YError: $!: $path") unless ($paths[$#paths] eq $path);
+#}
+
+
+

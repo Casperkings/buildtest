@@ -1,0 +1,288 @@
+#!/usr/xtensa/stools-7.0/bin/perl -w
+
+#
+# Copyright (c) 2012-2013 by Tensilica Inc. ALL RIGHTS RESERVED.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+
+use File::Temp qw/ tempfile tempdir /;
+use Getopt::Long;
+use strict;
+
+#parse the options
+my $outfilename;
+my $symname;
+my $verbose = 0;
+my $pagesize;
+my $symfile;
+my $symlookup;
+my $saveStrippedName;
+my $xtensa_core;
+my $xtensa_params;
+my $xtensa_system;
+my $xtensa_host_core;
+my $xtensa_host_params;
+my $xtensa_host_system;
+my $xtensa_target_core;
+my $xtensa_target_params;
+my $xtensa_target_system;
+
+my %optctl = (
+	      "o=s" => \$outfilename,
+	      "s=s" => \$saveStrippedName,
+	      "e=s" => \$symname,
+	      "v" => \$verbose,
+	      "p:i" => \$pagesize,
+	      "l" => \$symlookup,
+	      "xtensa-core=s" => \$xtensa_core,
+	      "xtensa-params=s" => \$xtensa_params,
+	      "xtensa-system=s" => \$xtensa_system,
+	      "xtensa-host-core=s" => \$xtensa_host_core,
+	      "xtensa-host-params=s" => \$xtensa_host_params,
+	      "xtensa-host-system=s" => \$xtensa_host_system,
+	      "xtensa-target-core=s" => \$xtensa_target_core,
+	      "xtensa-target-params=s" => \$xtensa_target_params,
+	      "xtensa-target-system=s" => \$xtensa_target_system
+);
+
+GetOptions(%optctl)
+  || die "error: no output file specified.";
+defined $outfilename || defined $saveStrippedName
+  || die "error: no output file specified";
+defined $symname || !defined $outfilename
+  || die "error: no library symbol specified";
+
+if (defined $xtensa_core) {
+    if ((defined $xtensa_host_core) && ($xtensa_core ne $xtensa_host_core)) {
+	print "warning: overriding --xtensa-host-core parameter with --xtensa-core\n";
+    }
+    $xtensa_host_core = $xtensa_core;
+    if ((defined $xtensa_target_core) && ($xtensa_core ne $xtensa_target_core)) {
+	print "warning: overriding --xtensa-target-core parameter with --xtensa-core\n";
+    }
+    $xtensa_target_core = $xtensa_core;
+}
+
+if (defined $xtensa_params) {
+    if ((defined $xtensa_host_params) && ($xtensa_params ne $xtensa_host_params)) {
+	print "warning: overriding --xtensa-host-params parameter with --xtensa-params\n";
+    }
+    $xtensa_host_params = $xtensa_params;
+    if ((defined $xtensa_target_params) && ($xtensa_params ne $xtensa_target_params)) {
+	print "warning: overriding --xtensa-target-params parameter with --xtensa-params\n";
+    }
+    $xtensa_target_params = $xtensa_params;
+}
+
+if (defined $xtensa_system) {
+    if ((defined $xtensa_host_system) && ($xtensa_system ne $xtensa_host_system)) {
+	print "warning: overriding --xtensa-host-system parameter with --xtensa-system\n";
+    }
+    $xtensa_host_system = $xtensa_system;
+    if ((defined $xtensa_target_system) && ($xtensa_system ne $xtensa_target_system)) {
+	print "warning: overriding --xtensa-target-system parameter with --xtensa-system\n";
+    }
+    $xtensa_target_system = $xtensa_system;
+}
+
+my @xtensa_host = ();
+
+if (defined $xtensa_host_core) {
+    push(@xtensa_host, "--xtensa-core=".$xtensa_host_core);
+}
+if (defined $xtensa_host_params) {
+    push(@xtensa_host, "--xtensa-params=".$xtensa_host_params);
+}
+if (defined $xtensa_host_system) {
+    push(@xtensa_host, "--xtensa-system=".$xtensa_host_system);
+}
+
+my @xtensa_target = ();
+
+if (defined $xtensa_target_core) {
+    push(@xtensa_target, "--xtensa-core=".$xtensa_target_core);
+}
+if (defined $xtensa_target_params) {
+    push(@xtensa_target, "--xtensa-params=".$xtensa_target_params);
+}
+if (defined $xtensa_target_system) {
+    push(@xtensa_target, "--xtensa-system=".$xtensa_target_system);
+}
+
+
+if (defined $pagesize && $pagesize == 0) {
+  $pagesize = 128;
+}
+
+if (@ARGV != 1) {
+  die "error: extra arguments.";
+}
+
+#setup some temp files
+my $tempfh;
+my $emptytemp;
+($tempfh, $emptytemp) = tempfile();
+my $flattenedlib;
+($tempfh, $flattenedlib) = tempfile();
+my $strippedlib;
+($tempfh, $strippedlib) = tempfile();
+my $pagedlib;
+($tempfh, $pagedlib) = tempfile();
+
+#do the work
+my $inputlib = $ARGV[0];
+
+#strip out all nonloadable sections
+!$verbose || print "Removing nonloadable sections...\n";
+if (defined $pagesize) {
+  !system("xt-strip", @xtensa_target, "--shared-pagesize=" . $pagesize, $inputlib, "-o", $strippedlib)
+  || die "error: couldn't strip input file.";
+}
+else {
+  !system("xt-strip", @xtensa_target, $inputlib, "-o", $strippedlib)
+  || die "error: couldn't strip input file.";
+}
+
+#strip out empty sections and special xtensa sections that shouldn't go on the target
+open OBJDUMP_OUTPUT, "xt-objdump " . (join " ", @xtensa_target) . " -h " . $strippedlib . " |"
+  || die "error: couldn't open stripped lib";
+
+my @emptysections = ("--remove-section=.xtensa.info",
+		     "--remove-section=.xt.lit",
+		     "--remove-section=.xt.prop",
+		     "--remove-section=.interp",
+		     "--remove-section=.got.loc",
+		     "--remove-section=.got",
+		    );
+
+if (!defined $symlookup) {
+  push (@emptysections, "--remove-section=.hash");
+  push (@emptysections, "--remove-section=.dynstr");
+  push (@emptysections, "--remove-section=.dynsym");
+  push (@emptysections, "--remove-section=.rela.plt");
+}
+
+while (<OBJDUMP_OUTPUT>) {
+  my @entries = split ;
+  if (defined $entries[2] && $entries[2] eq "00000000") {
+    push @emptysections, "--remove-section=" . $entries[1];
+  }
+}
+
+if (defined $pagesize) {
+  !system ("xt-objcopy", @xtensa_target, "--shared-pagesize=" . $pagesize, $strippedlib, $pagedlib, @emptysections)
+  || die "error: couldn't remove empty sections";
+}
+else {
+  !system ("xt-objcopy", @xtensa_target, $strippedlib, $pagedlib, @emptysections)
+    || die "error: couldn't remove empty sections";
+}
+
+if (defined $saveStrippedName) {
+   !system ("xt-objcopy", @xtensa_target, $pagedlib, $saveStrippedName)
+   || die "error: couldn't copy to saved stripped file";
+}
+
+defined $outfilename
+    || exit 0;
+
+#build an empty file quickly, $flattenedlib lib is an empty file
+!$verbose || print "Building empty object file...\n";
+!system ("xt-as", @xtensa_host, "-o", $emptytemp, $flattenedlib)
+  || die "error: couldn't build empty object file.";
+
+!$verbose || print "Copying library...\n";
+!system("xt-objcopy", @xtensa_host, $emptytemp, $flattenedlib,
+	"--add-section", "libdata=" . $pagedlib,
+	"--set-section-flags", "libdata=readonly,alloc")
+  || die "error: couldn't convert pie file to relocatable object.";
+
+
+#check for exported symbols
+my %definedSyms = ();
+
+# only do this for overlays. PIE's have their own
+# symbol exporting mechanism
+if (!defined $pagesize && defined $symfile) {
+  open NM_OUTPUT, "xt-nm " . $inputlib . " |"
+    || die "error: couldn't open stripped lib";
+  my $symname;
+  my $symval;
+  my $symtype;
+
+  while( <NM_OUTPUT> ) {
+
+    ( $symval, $symtype, $symname ) = split ;
+
+    $definedSyms{ $symname } = $symval;
+  }
+
+  close NM_OUTPUT;
+}
+
+my $asfile;
+my $asfileh;
+!$verbose || print "Writing linker script...\n";
+($asfileh, $asfile) = tempfile();
+printf($asfileh ".section libdata, \"a\"\n.align 4\n");
+my $ofile;
+my $ofileh;
+($ofile, $ofileh) = tempfile();
+!system("xt-as", @xtensa_host, "-o", $ofile, $asfile)
+  || die "error: couldn't assemble aligned object file";
+
+my $linkerscript;
+my $scriptfile;
+!$verbose || print "Writing linker script...\n";
+($scriptfile, $linkerscript) = tempfile();
+
+if (!defined $pagesize && defined $symfile) {
+  my $symfileh;
+  open $symfileh, $symfile || die "error: couldn't open symbol file: " . $symfile;
+
+  while (<$symfileh>) {
+    chomp;
+    my $symval;
+    if (defined $definedSyms{$_}) {
+      $symval = $definedSyms{$_};
+      printf($scriptfile "$_ = 0x$symval;\n");
+    }
+    else {
+      die ("error: symbol \"$_\" was not defined in the library.");
+    }
+  }
+}
+
+printf($scriptfile
+	"SECTIONS { .rodata : { "
+	. $symname . " = . ; *(libdata) }}\n");
+
+!$verbose || print "Linking into relocatable object...\n";
+!system("xt-ld", @xtensa_host, "-r", "-T",  $linkerscript,
+	$ofile, $flattenedlib, "-o", $outfilename)
+  || die "error: couldn't add section symbol.";
+
+unlink $linkerscript;
+unlink $flattenedlib;
+unlink $emptytemp;
+unlink $strippedlib;
+unlink $pagedlib;
+unlink $ofile;
+unlink $asfile;

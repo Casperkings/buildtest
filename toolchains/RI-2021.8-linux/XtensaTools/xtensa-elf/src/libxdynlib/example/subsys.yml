@@ -1,0 +1,92 @@
+---
+SubSystemName: SubSystem
+
+Metadata:
+  Version: 2
+
+Processors:
+  - Name              : CORE0
+    Config            : XRC_Vision_Q7_AO
+    Pipeline          : NX
+    ProcId            : 0
+    Master            : true
+    StaticVectorSel   : 0
+    DataRamFetchWidth : 64b
+    MasterDataWidth   : 16b
+    MasterInstWidth   : 16b
+    SlaveDataWidth    : 16b
+    IDMA              : {Shared: false, Width: 16b}
+    DataRam0:
+      {LocalAddr: 0x3ffc0000, GlobalAddr: 0x80100000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0x3ffe0000, GlobalAddr: 0x80200000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    LocalMMIO:
+      GlobalAddr : 0x80300000
+      Size       : 512b
+      InterruptRegister:
+        GlobalAddr : 0x80300000
+        InterruptMap:
+          - {BitOffset: 0, BInterrupt: 0, ProcInterrupt: 0, Type: Edge, xrpNotify: true}
+      Controls:
+        - {GlobalAddr: 0x80300004, ControlMap: [{Name: BReset}]}
+        - {GlobalAddr: 0x80300008, ControlMap: [{Name: RunStallOnReset}]}
+        - {GlobalAddr: 0x8030000c, ControlMap: [{Name: StatVectorSel}]}
+
+  - Name              : CORE1
+    Config            : XRC_Vision_Q7_AO
+    Pipeline          : NX
+    ProcId            : 1
+    StaticVectorSel   : 0
+    DataRamFetchWidth : 64b
+    MasterDataWidth   : 16b
+    MasterInstWidth   : 16b
+    SlaveDataWidth    : 16b
+    IDMA              : {Shared: false, Width: 16b}
+    DataRam0:
+      {LocalAddr: 0x3ffc0000, GlobalAddr: 0x80500000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0x3ffe0000, GlobalAddr: 0x80600000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    LocalMMIO:
+      GlobalAddr : 0x80700000
+      Size       : 512b
+      InterruptRegister:
+        GlobalAddr : 0x80700000
+        InterruptMap:
+          - {BitOffset: 0, BInterrupt: 0, ProcInterrupt: 0, Type: Edge, xrpNotify: true}
+      Controls:
+        - {GlobalAddr: 0x80700004, ControlMap: [{Name: BReset}]}
+        - {GlobalAddr: 0x80700008, ControlMap: [{Name: RunStallOnReset}]}
+        - {GlobalAddr: 0x8070000c, ControlMap: [{Name: StatVectorSel}]}
+
+SystemRAM:
+  Size             : 512Mb
+  GlobalAddr       : 0x60000000
+  ReadDelay        : 1
+  ReadRepeat       : 1
+  WriteDelay       : 1
+  WriteRepeat      : 1
+  RequestFIFODepth : 255
+
+SystemROM:
+  {Size: 16Mb, GlobalAddr: 0x50000000}
+
+DeviceMemories:
+  - {Name: Shared_RAM_L, 
+     Size: 256Mb, 
+     GlobalAddr: 0x90000000,
+     ReadDelay: 1,
+     ReadRepeat: 1,
+     WriteDelay: 1,
+     WriteRepeat: 1,
+     HostShared: true,
+     HostName: SharedRAM_L,
+     RequestFIFODepth : 255}
+
+SubSystemInterconnect:
+  - {Src: CommonBus,   Dests: [CORE0, CORE1]}
+
+SubSystemSoftware:
+  XRPDeviceTreeSpec: {
+     XRPSharedMem: Shared_RAM_L
+  }
+

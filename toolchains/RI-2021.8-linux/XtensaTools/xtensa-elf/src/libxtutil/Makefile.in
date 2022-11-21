@@ -1,0 +1,98 @@
+# Makefile for libxtutil.a
+
+# Copyright (c) 2013 Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+VPATH = $(srcdir)
+prefix = @prefix@
+target_alias = @target_alias@
+target_libdir = $(prefix)/$(target_alias)/lib
+
+top_builddir = @abs_top_builddir@
+top_srcdir = @top_srcdir@
+
+default: all
+include $(top_builddir)/../../Makefile.env
+
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+
+# NOTE:  xtutil.h is in ../include , which gets installed in the
+# Xtensa Tools xtensa-elf/include/xtensa directory.
+
+TPP = $(TENSILICA_TOOLS)/bin/tpp
+
+WFLAGS   = -Werror -Wall -Wextra -Wunused -Wundef -Wstrict-prototypes -Wpointer-arith \
+	   -Wcast-qual -Wformat-security -Wmissing-prototypes -Wshadow -Wsign-compare -pedantic
+
+# Extra warning flags for use with xt-clang.
+MWFLAGS  = -Wshadow-all -Wunreachable-code-aggressive -Wduplicate-enum \
+	   -Wcompare-distinct-pointer-types -Warray-bounds-pointer-arithmetic -Wvla
+
+CFLAGS = -Os -g -mlongcalls -mno-l32r-flix -ffunction-sections $(WFLAGS)
+
+CC_FOR_TARGET = $(XTTOOLS)/bin/$(XTENSA_CC_FOR_TARGET)
+AR_FOR_TARGET = $(XTTOOLS)/bin/xt-ar
+AR_FLAGS = rc
+
+WHICH_CC = $(findstring xt-clang,$(CC_FOR_TARGET))
+ifeq ($(WHICH_CC), xt-clang)
+CFLAGS += $(MWFLAGS) -std=c11
+else
+CFLAGS += -std=c99
+endif
+
+
+LIB_XTUTIL_C_FILES =	\
+	xt_output.c     \
+	xt_printf.c     \
+	xt_sprintf.c    \
+	xt_utils.c      \
+	xt_vprint.c     \
+	xt_vprintf.c    \
+	xt_vsprintf.c   \
+	xt_snprintf.c   \
+	xt_vsnprintf.c  \
+	xt_mtrack.c
+
+LIB_XTUTIL_OBJS = 	\
+   $(LIB_XTUTIL_C_FILES:.c=.o)
+
+%.o : %.c
+	$(CC_FOR_TARGET) -c $(CFLAGS) -o $@ $<
+
+LIB_XTUTIL = libxtutil.a
+
+$(LIB_XTUTIL) : $(LIB_XTUTIL_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+.PHONY: default all all-target install install-target clean
+
+all: $(LIB_XTUTIL)
+
+all-target: all
+
+install: all
+	$(INSTALL) $(LIB_XTUTIL) $(target_libdir)
+
+install-target: install
+
+clean:
+	rm -f *.o *.a *.d $(TARGET_EXE) $(HOST_EXE)
+
+###########################################################################
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) && $(SHELL) ./config.status
+
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && $(SHELL) ./config.status --recheck
+

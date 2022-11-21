@@ -1,0 +1,744 @@
+imap xocl_cvt{out wvec a, in wvec b} 
+  {
+    {}
+    {
+      a = b;
+    }
+  }
+  {
+    {vec vh, vec vl}
+    {
+      IVP_CVT32UNX48H vh, b;
+      IVP_CVT32UNX48L vl, b;
+      IVP_CVT48UNX32 a, vh, vl;
+    } 
+  }
+
+
+imap xocl_cvt1{out wvec a, in wvec b} 
+  {
+    {}
+    {
+      a = b;
+    }
+  }
+  {
+    {vec vh, vec vl}
+    {
+      IVP_CVT32UNX48H vh, b;
+      IVP_CVT32UNX48L vl, b;
+      IVP_CVT48SNX32 a, vh, vl;
+    } 
+  }
+
+imap xocl_cvt2{out wvec a, in wvec b}
+  {
+    {}
+    {
+      a = b;
+    }
+  }
+  {
+    {vec hh, vec hl, vec lh, vec ll}
+    {
+      IVP_CVT32S2NX24HH hh, b;
+      IVP_CVT32S2NX24HL hl, b;
+      IVP_CVT32S2NX24LH lh, b;
+      IVP_CVT32S2NX24LL ll, b;
+      IVP_CVT24UNX32L a, lh, ll;
+      IVP_CVT24UNX32H a, hh, hl;
+    }
+  }
+
+
+imap xocl_cvt3{out wvec a, in wvec b}
+  {
+    {}
+    {
+      a = b;
+    }
+  }
+  {
+    {vec vh, vec vl}
+    {
+      IVP_CVT64UN_2X96H vh, b;
+      IVP_CVT64UN_2X96L vl, b;
+      IVP_CVT96UN_2X64 a, vh, vl;
+    }
+  }
+
+imap xocl_gather{out vec rx, in gvr gr} 
+  {
+    {}
+    {
+      IVP_GATHERDNX16 rx, gr; 
+    }
+  }
+  {
+    {vec tv, vec tv1, AR ta }
+    {
+      MOVI ta, 255;
+      IVP_MOVVA16 tv, ta;
+      IVP_GATHERDNX8S tv1, gr;
+      IVP_AND2NX8 rx, tv1, tv;
+    } 
+  }
+
+imap xocl_dseli{out vec c, out vec d, in vec a, in vec b}
+  {
+    {}
+    {
+      c = a;
+      d = b;
+    }
+  }
+  {
+    {vec vt0, vec vt1}
+    {
+      IVP_DSEL2NX8I vt1, vt0, b, a, 12;
+      IVP_DSEL2NX8I d, c, vt1, vt0, 13;
+    }
+  }
+
+imap xocl_dseli1{out vec c, out vec d, in vec a, in vec b}
+  {
+    {}
+    {
+      c = a;
+      d = b;
+    }
+  }
+  {
+    {vec vt0, vec vt1}
+    {
+      IVP_DSEL2NX8I vt1, vt0, b, a, 13;
+      IVP_DSEL2NX8I d, c, vt1, vt0, 12;
+    }
+  }
+
+imap xocl_dseli2{out vec c, out vec d, in vec a, in vec b}
+  {
+    {}
+    {
+      IVP_DSEL2NX8I d, c, b, a, 13;
+    }
+  }
+  {
+    {}
+    {
+      IVP_SEL2NX8I c, b, a, 16;
+      IVP_SEL2NX8I d, b, a, 17;
+    }
+  }
+
+imap xocl_dseli3{out vec c, out vec d, in vec a, in vec b}
+  {
+    {}
+    {
+      IVP_DSEL2NX8I d, c, b, a, 12;
+    }
+  }
+  {
+    {}
+    {
+      IVP_SEL2NX8I c, b, a, 32;
+      IVP_SEL2NX8I d, b, a, 33;
+    }
+  }
+
+
+imap xocl_muluupa{inout wvec e, in vec a, in vec b, in vec c, in vec d}
+  {
+    {}
+    {
+      IVP_MULUUPA2NX8 e, a, b, c, d;
+    }
+  }
+  {
+    {}
+    {
+      IVP_MULUUA2NX8 e, a, b;
+      IVP_MULUUA2NX8 e, c, d;
+    }
+  }
+
+imap xocl_muluspa{inout wvec e, in vec a, in vec b, in vec c, in vec d}
+  {
+    {}
+    {
+      IVP_MULUSPA2NX8 e, a, b, c, d;
+    }
+  }
+  {
+    {}
+    {
+      IVP_MULUSA2NX8 e, a, b;
+      IVP_MULUSA2NX8 e, c, d;
+    }
+  }
+
+imap xocl_mulpa{inout wvec e, in vec a, in vec b, in vec c, in vec d}
+  {
+    {}
+    {
+      IVP_MULPA2NX8 e, a, b, c, d;
+    }
+  }
+  {
+    {}
+    {
+      IVP_MULA2NX8 e, a, b;
+      IVP_MULA2NX8 e, c, d;
+    }
+  }
+
+imap xocl_mul16pa{inout wvec e, in vec a, in vec b, in vec c, in vec d}
+  {
+    {}
+    {
+      IVP_MULPANX16 e, a, b, c, d;
+    }
+  }
+  {
+    {}
+    {
+      IVP_MULANX16 e, a, b;
+      IVP_MULANX16 e, c, d;
+    }
+  }
+
+
+imap xocl_qmul4t{out wvec acc, in vec a, in vec b,
+                 in AR s0, in AR s1, in AR s2, in AR s3} {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s0;
+      ts1 = s1;
+      ts2 = s2;
+      ts3 = s3;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULUS4T2N8XR8 acc, a, b, tsp0;
+    }
+  }
+  {
+    {vec vv0, vec vv1, vec vv2, vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2,
+     b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_SEL2NX8I vv0, a, b, 65;
+      IVP_SEL2NX8I vv1, a, b, 0;
+      IVP_SEL2NX8I vv2, a, b, 67;
+      IVP_MOVVINT8 z, 0;
+      IVP_MULUSQ2N8XR8 acc, z, z, z, b, sp0;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, vv0, sp1;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, vv1, sp2;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, vv2, sp3;
+    }
+  }
+
+imap xocl_qmula4t{inout wvec acc, in vec a, in vec b,
+                  in AR s0, in AR s1, in AR s2, in AR s3} {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s0;
+      ts1 = s1;
+      ts2 = s2;
+      ts3 = s3;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULUS4TA2N8XR8 acc, a, b, tsp0;
+    }
+  }
+  {
+    {vec vv0, vec vv1, vec vv2, vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2,
+     b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_SEL2NX8I vv0, a, b, 65;
+      IVP_SEL2NX8I vv1, a, b, 0;
+      IVP_SEL2NX8I vv2, a, b, 67;
+      IVP_MOVVINT8 z, 0;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, b, sp0;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, vv0, sp1;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, vv1, sp2;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, vv2, sp3;
+    }
+  }
+
+imap xocl_qmul{out wvec acc, in vec a, in vec b, in vec c, in vec d,
+               in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULQ2N8XR8 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT8 z, 0;
+      IVP_MULQ2N8XR8 acc, z, z, z, a, sp0;
+      IVP_MULQA2N8XR8 acc, z, z, z, b, sp1;
+      IVP_MULQA2N8XR8 acc, z, z, z, c, sp2;
+      IVP_MULQA2N8XR8 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmula{inout wvec acc, in vec a, in vec b, in vec c, in vec d,
+                in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULQA2N8XR8 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT8 z, 0;
+      IVP_MULQA2N8XR8 acc, z, z, z, a, sp0;
+      IVP_MULQA2N8XR8 acc, z, z, z, b, sp1;
+      IVP_MULQA2N8XR8 acc, z, z, z, c, sp2;
+      IVP_MULQA2N8XR8 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmulus{out wvec acc, in vec a, in vec b, in vec c, in vec d,
+                 in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULUSQ2N8XR8 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT8 z, 0;
+      IVP_MULUSQ2N8XR8 acc, z, z, z, a, sp0;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, b, sp1;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, c, sp2;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmulusa{inout wvec acc, in vec a, in vec b, in vec c, in vec d,
+                  in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULUSQA2N8XR8 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT8 z, 0;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, a, sp0;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, b, sp1;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, c, sp2;
+      IVP_MULUSQA2N8XR8 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmuluu{out wvec acc, in vec a, in vec b, in vec c, in vec d,
+                 in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULUUQ2N8XR8 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT8 z, 0;
+      IVP_MULUUQ2N8XR8 acc, z, z, z, a, sp0;
+      IVP_MULUUQA2N8XR8 acc, z, z, z, b, sp1;
+      IVP_MULUUQA2N8XR8 acc, z, z, z, c, sp2;
+      IVP_MULUUQA2N8XR8 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmuluua{inout wvec acc, in vec a, in vec b, in vec c, in vec d,
+                  in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULUUQA2N8XR8 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT8 z, 0;
+      IVP_MULUUQA2N8XR8 acc, z, z, z, a, sp0;
+      IVP_MULUUQA2N8XR8 acc, z, z, z, b, sp1;
+      IVP_MULUUQA2N8XR8 acc, z, z, z, c, sp2;
+      IVP_MULUUQA2N8XR8 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmul1{out wvec acc, in vec a, in vec b, in vec c, in vec d,
+                in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULQN16XR8 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT16 z, 0;
+      IVP_MULQN16XR8 acc, z, z, z, a, sp0;
+      IVP_MULQAN16XR8 acc, z, z, z, b, sp1;
+      IVP_MULQAN16XR8 acc, z, z, z, c, sp2;
+      IVP_MULQAN16XR8 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmula1{inout wvec acc, in vec a, in vec b, in vec c, in vec d,
+                 in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 255;
+      AND ts0, ts0, mask;
+      AND ts1, ts1, mask;
+      AND ts2, ts2, mask;
+      SLLI ts1, ts1, 8;
+      SLLI ts2, ts2, 16;
+      SLLI ts3, ts3, 24;
+      OR ts0, ts0, ts1;
+      OR ts0, ts0, ts2;
+      OR ts0, ts0, ts3;
+      IVP_MOVPRA32 tsp0, ts0;
+      IVP_MULQAN16XR8 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT16 z, 0;
+      IVP_MULQAN16XR8 acc, z, z, z, a, sp0;
+      IVP_MULQAN16XR8 acc, z, z, z, b, sp1;
+      IVP_MULQAN16XR8 acc, z, z, z, c, sp2;
+      IVP_MULQAN16XR8 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmul2{out wvec acc, in vec a, in vec b, in vec c, in vec d,
+                in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0, vec tv0, vec tv1}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 65535;
+      AND ts0, ts0, mask;
+      SLLI ts1, ts1, 16;
+      OR ts0, ts0, ts1;
+      AND ts2, ts2, mask;
+      SLLI ts3, ts3, 16;
+      OR ts2, ts2, ts3;
+      IVP_MOVVA32 tv0, ts0;
+      IVP_MOVVA32 tv1, ts2;
+      IVP_DEXTRPRN_2X32 tsp0, tv1, tv0, 0, 0;
+      IVP_MULQN16XR16 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT16 z, 0;
+      IVP_MULQN16XR16 acc, z, z, z, a, sp0;
+      IVP_MULQAN16XR16 acc, z, z, z, b, sp1;
+      IVP_MULQAN16XR16 acc, z, z, z, c, sp2;
+      IVP_MULQAN16XR16 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_qmula2{inout wvec acc, in vec a, in vec b, in vec c, in vec d,
+                 in AR s0, in AR s1, in AR s2, in AR s3}
+  {
+    {AR ts0, AR ts1, AR ts2, AR ts3, AR mask, b32_pr tsp0, vec tv0, vec tv1}
+    {
+      ts0 = s3;
+      ts1 = s2;
+      ts2 = s1;
+      ts3 = s0;
+      mask = 65535;
+      AND ts0, ts0, mask;
+      SLLI ts1, ts1, 16;
+      OR ts0, ts0, ts1;
+      AND ts2, ts2, mask;
+      SLLI ts3, ts3, 16;
+      OR ts2, ts2, ts3;
+      IVP_MOVVA32 tv0, ts0;
+      IVP_MOVVA32 tv1, ts2;
+      IVP_DEXTRPRN_2X32 tsp0, tv1, tv0, 0, 0;
+      IVP_MULQAN16XR16 acc, a, b, c, d, tsp0;
+    }
+  }
+  {
+    {vec z, b32_pr sp0, b32_pr sp1, b32_pr sp2, b32_pr sp3}
+    {
+      IVP_MOVPRA32 sp0, s0;
+      IVP_MOVPRA32 sp1, s1;
+      IVP_MOVPRA32 sp2, s2;
+      IVP_MOVPRA32 sp3, s3;
+      IVP_MOVVINT16 z, 0;
+      IVP_MULQAN16XR16 acc, z, z, z, a, sp0;
+      IVP_MULQAN16XR16 acc, z, z, z, b, sp1;
+      IVP_MULQAN16XR16 acc, z, z, z, c, sp2;
+      IVP_MULQAN16XR16 acc, z, z, z, d, sp3;
+    }
+  }
+
+imap xocl_mul8xr16pa{inout wvec c, in vec a, in vec b, in AR ar0, in AR ar1}
+  {
+    {AR ar_t, b32_pr pr_t}
+    {
+      ar_t = ar0;
+      SLLI ar_t, ar_t, 16;
+      OR ar_t, ar_t, ar1;
+      IVP_MOVPRA32 pr_t, ar_t;
+      IVP_MULUSPA2N8XR16 c, a, b, pr_t;
+    }
+  }
+  {
+    {vec vt00, vec vt01, vec vt1, vec vt2, vec vt3, vec vt4}
+    {
+      IVP_MOVVA16 vt00, ar0;
+      IVP_DSEL2NX8I vt1, vt2, vt00, vt00, 13;
+      IVP_MOVVA16 vt01, ar1;
+      IVP_DSEL2NX8I vt3, vt4, vt01, vt01, 13;
+      IVP_MULUSAI2NX8X16 c, a, vt1, vt2;
+      IVP_MULUSAI2NX8X16 c, b, vt3, vt4;
+    }
+  }
+
+imap xocl_mul8xr16p{out wvec c, in vec a, in vec b, in AR ar0, in AR ar1}
+  {
+    {AR ar_t, b32_pr pr_t}
+    {
+      ar_t = ar0;
+      SLLI ar_t, ar_t, 16;
+      OR ar_t, ar_t, ar1;
+      IVP_MOVPRA32 pr_t, ar_t;
+      IVP_MULUSP2N8XR16 c, a, b, pr_t;
+    }
+  }
+  {
+    {vec vt00, vec vt01, vec vt1, vec vt2, vec vt3, vec vt4}
+    {
+      IVP_MOVVA16 vt00, ar0;
+      IVP_DSEL2NX8I vt1, vt2, vt00, vt00, 13;
+      IVP_MOVVA16 vt01, ar1;
+      IVP_DSEL2NX8I vt3, vt4, vt01, vt01, 13;
+      IVP_MULUSI2NX8X16 c, a, vt1, vt2;
+      IVP_MULUSAI2NX8X16 c, b, vt3, vt4;
+    }
+  }
+
+imap imap_lsr8 {out vec a, in AR b, in immediate c}
+  {
+    {}
+    {
+      IVP_LSR2NX8_I a, b, c;
+    }
+  }
+  {
+    {AR t}
+    {
+      L8UI t, b, c;
+      IVP_MOVVA8 a, t;
+    }
+  }
+
+property imap_relaxNumOutputInstrs xocl_qmul
+property imap_relaxNumOutputInstrs xocl_qmul1
+property imap_relaxNumOutputInstrs xocl_qmul2
+property imap_relaxNumOutputInstrs xocl_qmula
+property imap_relaxNumOutputInstrs xocl_qmula1
+property imap_relaxNumOutputInstrs xocl_qmula2
+property imap_relaxNumOutputInstrs xocl_qmulus
+property imap_relaxNumOutputInstrs xocl_qmulusa
+property imap_relaxNumOutputInstrs xocl_qmuluu
+property imap_relaxNumOutputInstrs xocl_qmuluua
+property imap_relaxNumOutputInstrs xocl_qmul4t
+property imap_relaxNumOutputInstrs xocl_qmula4t
+

@@ -1,0 +1,46 @@
+
+Copyright (c) 2019-2020 Cadence Design Systems, Inc. All Rights Reserved.
+
+    Instructions for rebuilding the libidma library
+    ===============================================
+
+The libidma library can be rebuilt if necessary, following the instructions
+below. The rebuild must be done using command-line tools only. The Xtensa
+toolchain must be installed and configured properly beforehand.
+
+ - Open a command shell (Windows) or terminal window (Linux). You can open
+   this directly from the Xplorer GUI by right-clicking on the desired
+   configuration in the System Overview window. If you open from Xplorer then
+   the environment will be set up correctly for you. If you do it manually then
+   make sure that the path and environment variables are set up correctly
+   for the Xtensa tools and your chosen configuration.
+
+ - Change directory to the location where the libidma sources are present.
+   (This file should have been present in the same location).
+
+ - The command "xt-make -f Makefile.src all" will build all the available
+   variants of the library. By default, the generated files go into a
+   subdirectory "bin" of the current working directory. The following make
+   variables can be specified on the command line (or set in the environment)
+   to override the default settings -
+
+   BINDIR -- the build output (.o files and .a files) go here.
+   SRCDIR -- location of the source files.
+
+   CC_FOR_TARGET -- the compiler to use. The default is "xt-clang". Either
+                    xt-clang or xt-xcc can be used. By default, "-std=c11"
+                    is used with the Xtensa C Library (xclib) and "-std=c99"
+                    with newlib.
+
+ - Do not override the CFLAGS make variable directly. Some of the things
+   included in the default CFLAGS are required. Define CFLAGS_EXTRA or edit
+   the makefile to change the compiler options directly if desired.
+
+ - The library (.a) files can be copied to their final location after the
+   build has completed.
+
+ - If you have changed any of the source or header files, then verifying
+   correct operation of the resulting library is your responsibility.
+
+-End-
+

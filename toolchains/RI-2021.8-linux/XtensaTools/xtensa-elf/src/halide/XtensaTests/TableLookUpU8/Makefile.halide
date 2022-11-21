@@ -1,0 +1,29 @@
+include ../Makefile.common
+
+CXX=g++
+
+GENERATOR_DEPS ?= $(HALIDE_BIN_PATH)/lib/libHalide.a $(HALIDE_BIN_PATH)/include/Halide.h $(HALIDE_SRC_PATH)/tools/GenGen.cpp
+
+CXXFLAGS += -std=c++11 -I $(HALIDE_BIN_PATH)/include/ -I $(HALIDE_SRC_PATH)/tools/ -I $(HALIDE_SRC_PATH)/apps/support
+
+HL_TARGET ?= opencl-cl_cadence
+
+build: $(BIN)/host/TableLookUpU8.a
+
+$(BIN)/TableLookUpU8.generator: TableLookUpU8_generator.cpp $(GENERATOR_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -fno-rtti $(filter-out %.h,$^) -o $@ $(LDFLAGS) $(HALIDE_SYSTEM_LDFLAGS) -g
+
+$(BIN)/%/TableLookUpU8.a: $(BIN)/TableLookUpU8.generator
+	@mkdir -p $(@D)
+	$^ -g TableLookUpU8 -o $(BIN)/$* -e assembly,bitcode,cpp,h,html,o,static_library,stmt,cpp_stub target=$(HL_TARGET)
+
+$(BIN)/%/test: $(BIN)/%/TableLookUpU8.a test.cpp
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS)-Wall -O2 -I$(BIN)/$* test.cpp $(BIN)/$*/TableLookUpU8.a -o $@ $(LDFLAGS) -g
+
+clean:
+	rm -rf $(BIN) *.cl
+
+test_host: $(BIN)/host/test
+	$(BIN)/host/test

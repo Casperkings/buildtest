@@ -1,0 +1,50 @@
+#  Makefile for host files in MP system builds (invoked by Makefile.mbuild)
+#
+# Copyright (c) 2005-2018 by Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+#  Get definitions useful for system builds:
+include $(XTENSA_TOOLS_ROOT)/src/system/mbuild-defs.mk
+include $(XTENSA_SYSTEM_ROOT)/sys-defs.mk
+
+XTSC_RUN_DEST = $(XTENSA_SYSTEM_ROOT)/xtsc-run
+
+.PHONY: memory_models
+
+all: 
+
+populate: $(XTSC_RUN_DEST)/SYSTEM.inc
+
+$(XTSC_RUN_DEST)/SYSTEM.inc: $(XTENSA_TOOLS_ROOT)/src/system/xtsc-run/SYSTEM.inc.tpp $(SOCFILE)
+	-$(call mkpath, $(@D))
+	$(SYSTPP) -x $(SOCFILE) -I $(XTENSA_TOOLS_ROOT)/lib/perl -o $@ $<
+	-$(call cp, *.def, $(@D))
+
+
+
+ifeq ($(ARCH_OSTYPE),unix_DISABLED_FOR_NOW)
+
+populate: $(XTSC_RUN_DEST)/SYSTEM.cosim.verilog.on.top.inc $(XTSC_RUN_DEST)/SYSTEM.cosim.systemc.on.top.inc memory_models
+
+$(XTSC_RUN_DEST)/SYSTEM.cosim.verilog.on.top.inc: $(XTENSA_TOOLS_ROOT)/src/system/xtsc-run/SYSTEM.cosim.verilog.on.top.inc.tpp $(SOCFILE)
+	-$(call mkpath, $(@D))
+	$(SYSTPP) -x $(SOCFILE) -I $(XTENSA_TOOLS_ROOT)/lib/perl -o $@ $<
+	-$(call cp, *.def, $(@D))
+
+$(XTSC_RUN_DEST)/SYSTEM.cosim.systemc.on.top.inc: $(XTENSA_TOOLS_ROOT)/src/system/xtsc-run/SYSTEM.cosim.systemc.on.top.inc.tpp $(SOCFILE)
+	-$(call mkpath, $(@D))
+	$(SYSTPP) -x $(SOCFILE) -I $(XTENSA_TOOLS_ROOT)/lib/perl -o $@ $<
+	-$(call cp, *.def, $(@D))
+
+memory_models:
+	-$(call mkpath, $(@D))
+	$(SYSTPP) -x $(SOCFILE) -I $(XTENSA_TOOLS_ROOT)/lib/perl $(XTENSA_TOOLS_ROOT)/src/system/xtsc-run/memory.lister.tpp
+	for file in *.sv; do \
+	  $(SYSTPP) -e "`cat $$file`" -o $(XTSC_RUN_DEST)/$$file $(XTENSA_TOOLS_ROOT)/src/system/xtsc-run/CONFIG_MEMORY.sv.tpp; \
+	done; 
+
+endif

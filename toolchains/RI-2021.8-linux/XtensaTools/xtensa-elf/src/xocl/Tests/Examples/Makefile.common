@@ -1,0 +1,3 @@
+HOST_COMPILE_COMMON_FLAGS += -O2  -Wall -Werror -Wno-unused-result -I../Common -I../../libxi/host_ref/include
+
+DEVICE_COMPILE_COMMON_FLAGS = --xt-async-opt

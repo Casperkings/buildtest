@@ -1,0 +1,238 @@
+# Makefile for the link-time HAL in <xtensa_tools_root>/xtensa-elf/src/hal
+
+# Copyright (c) 1999-2016 Tensilica Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+#
+#  This makefile assumes GNU make features
+#
+#  Invoke this Makefile like this:
+#	cd <some build directory>
+#	make -f <this file> XTENSA_TOOLS_ROOT=<path to Xtensa Tools> \
+#		XTENSA_ROOT=<path to Xtensa core package> \
+#		INSTLIBDIR=<path to installation directory>
+#
+
+ifndef XTENSA_TOOLS_ROOT
+$(error Please set XTENSA_TOOLS_ROOT to the path to Xtensa Tools)
+endif
+#  NOTE:  For now, we assume $(XTENSA_TOOLS_ROOT)/bin is on the PATH.
+ifndef XTENSA_ROOT
+$(error Please set XTENSA_ROOT to the path to your specific Xtensa core package)
+endif
+ifndef INSTLIBDIR
+$(error Please set INSTLIBDIR to the path where libraries and objects are installed)
+#INSTLIBDIR = $(call fixpath,$(XTENSA_ROOT)/xtensa-elf/arch/lib)
+endif
+
+#  Select the specified Xtensa configuration:
+export XTENSA_SYSTEM = $(XTENSA_ROOT)/config
+#export XTENSA_CORE = default
+
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+
+ifndef SRCDIR
+$(error Please set MAKEFILE_SRC to the path to this Makefile.src)
+endif
+
+# Section renaming. HAL has no writable data that needs to be replicated per-cpu.
+RFLAGS   = \
+	--rename-section .data=.rtos.data \
+	--rename-section .bss=.rtos.bss   \
+	--rename-section .rodata=.rtos.rodata
+	
+#  Detect C library
+XSTR2    = $(shell grep SW_CLibrary `xt-clang --show-config=config`/config/default-params)
+CLIB     = $(word 3, $(XSTR2))
+
+ifeq ($(CLIB), xclib)
+CSTD     = -std=c11
+else
+CSTD     = -std=c99
+endif
+
+WARNOPT   = -Werror -Wall -Wextra -Wunused -Wundef -Wstrict-prototypes -Wpointer-arith \
+	    -Wcast-qual -Wformat-security -Wmissing-prototypes -Wshadow -Wsign-compare -pedantic
+
+#  Extra warning flags for use with xt-clang.
+MWARNOPT  = -Wshadow-all -Wunreachable-code-aggressive -Wduplicate-enum \
+	    -Wcompare-distinct-pointer-types -Warray-bounds-pointer-arithmetic -Wvla
+
+CFLAGS = -O2 -g $(WARNOPT) -mlongcalls -mno-l32r-flix -ffunction-sections
+
+ifeq ($(CC_FOR_TARGET),xt-clang)
+CFLAGS += $(CSTD) $(MWARNOPT)
+else
+CFLAGS += -clang $(CSTD)
+endif
+
+#  NOTE: HAL_FUSA indicates if we are targeting a certified build.
+#  It will be set to "true" if a certified build is required.
+XSTR      = $(shell grep XCHAL_HAVE_FUNC_SAFETY `xt-clang --show-config=config`/src/config/core.h)
+HAL_FUSA = $(word 3, $(XSTR))
+
+
+#  Compile parts of these files separately, to avoid unnecessarily large
+#  objects without creating too many source files.
+#  Files are split with "#[el]if defined(__SPLIT__<tag>)" lines
+#  using normal C preprocessor syntax, where each <tag> must be unique and
+#  consist of lowercase alphanumeric and underscore characters only (no dash etc).
+
+SPLIT_SOURCES_CERTIFIED = state_asm.S state.c miscellaneous.S mpu.c \
+	 mpu_asm.S cache_asm.S const.c hugerange_cache.S cache_attr.S 
+ifneq ($(HAL_FUSA),1)
+SPLIT_SOURCES_NOT_CERTIFIED = \
+		mem_ecc_parity.S disass.c state.c L2_cache.S cache.c state_asm.S
+endif
+
+#  Determine split object files to create, of form <srcbasename>--<tag>.o :
+SPLIT_OBJS_CERTIFIED := $(shell cd $(SRCDIR) && $(PERL) -ne '/__SPLIT__(\w+)/ and $$h{$$ARGV."--".$$1}++;\
+ END {foreach (sort keys %h) {s/\..--/--/; print "$$_.o\n";}}' $(SPLIT_SOURCES_CERTIFIED))
+#  Make doesn't stop if $(shell ...) fails, so catch any such failure explicitly:
+ifeq ($(SPLIT_OBJS_CERTIFIED),)
+$(error Error invoking $(PERL) to split sources $(SPLIT_SOURCES_CERTIFIED))
+endif
+
+ifneq ($(HAL_FUSA),1)
+SPLIT_OBJS_NOT_CERTIFIED := $(shell cd $(SRCDIR)/not_certified && $(PERL) -ne '/__SPLIT__(\w+)/ and $$h{$$ARGV."--".$$1}++;\
+ END {foreach (sort keys %h) {s/\..--/--/; print "$$_.o\n";}}' $(SPLIT_SOURCES_NOT_CERTIFIED))
+#  Make doesn't stop if $(shell ...) fails, so catch any such failure explicitly:
+ifeq ($(SPLIT_OBJS_NOT_CERTIFIED),)
+$(error Error invoking $(PERL) to split sources $(SPLIT_NOT_SOURCES_CERTIFIED))
+endif
+endif
+
+#  Call0 ABI means the xthal... and xthal..._nw functions are
+#  identical.  If we're building for Call0 ABI, omit the ..._nw
+#  functions (except for xthal_get_intpending_nw, an interrupt handler
+#  helper function for which there is no duplicate and which does not
+#  obey _any_ calling conventions).
+
+CALL0_ABI :=$(filter __XTENSA_CALL0_ABI__, $(shell echo '' | $(CC_FOR_TARGET) --xtensa-system=$(XTENSA_SYSTEM) --xtensa-core=$(XTENSA_CORE) -E -dM - ))
+ifneq ($(CALL0_ABI),)
+SPLIT_OBJS_CERTIFIED := $(filter-out %_nw.o,$(SPLIT_OBJS_CERTIFIED))
+
+ifneq ($(HAL_FUSA),1)
+SPLIT_OBJS_NOT_CERTIFIED := $(filter-out %_nw.o,$(SPLIT_OBJS_NOT_CERTIFIED))
+SPLIT_OBJS_NOT_CERTIFIED := $(SPLIT_OBJS_NOT_CERTIFIED)
+endif
+endif
+
+ifneq ($(HAL_FUSA),1)
+OBJS_NOT_CERTIFIED = 				\
+	not_certified/mmu.o			\
+	not_certified/set_region_translate.o	\
+	not_certified/cache.o			\
+	not_certified/coherence.o		\
+	not_certified/debug.o			\
+	not_certified/debug_hndlr.o		\
+	not_certified/mpu_deprecated.o
+
+endif
+		
+OBJS_CERTIFIED =		\
+	miscellaneous.o		\
+	mp_asm.o		\
+	windowspill_asm.o	\
+	memcopy.o		\
+	const.o			\
+	miscellaneous.o		\
+	xnne_asm.o		\
+	xnne.o			\
+	apb.o			\
+	misc.o			\
+	mpu_set_attr.o		\
+	attribute.o		\
+	clock.o			\
+	memcpy_s.o
+	
+	
+OBJS =  $(OBJS_CERTIFIED) $(SPLIT_OBJS_CERTIFIED)
+ifneq ($(HAL_FUSA),1)
+# to do a certified only HAL build, comment out the following line
+OBJS += $(OBJS_NOT_CERTIFIED) $(SPLIT_OBJS_NOT_CERTIFIED)
+endif
+
+HALLIB = libhal.a
+
+
+.PHONY: all install clean
+
+all: $(HALLIB)
+
+$(HALLIB): $(OBJS)
+
+#  For following rule, determine various things from $* (extended basename):
+SPLIT_SOURCE_CERTIFIED = $(filter $(patsubst %/,%,$(dir $(subst --,/,$*))).%,$(SPLIT_SOURCES_CERTIFIED))
+SPLIT_TAG_CERTIFIED    = $(notdir $(subst --,/,$*))
+SPLIT_FLAGS_CERTITFIED  = $(FLAGS_$(basename $(SPLIT_SOURCE_CERTIFIED)))
+
+ifneq ($(HAL_FUSA),1)
+#  For following rule, determine various things from $* (extended basename):
+SPLIT_SOURCE_NOT_CERTIFIED = $(filter $(patsubst %/,%,$(dir $(subst --,/,$*))).%,$(SPLIT_SOURCES_NOT_CERTIFIED))
+SPLIT_TAG_NOT_CERTIFIED    = $(notdir $(subst --,/,$*))
+SPLIT_FLAGS_NOT_CERTIFIED  = $(FLAGS_$(basename $(SPLIT_SOURCE_NOT_CERTIFIED)))
+endif
+
+$(SPLIT_OBJS): %.o:
+	$(CC_FOR_TARGET) -c $(CFLAGS) $(SPLIT_FLAGS) $(SRCDIR)/$(SPLIT_SOURCE) -D__SPLIT__$(SPLIT_TAG) -MMD -MF $*.d -o $@
+$(filter %_nw.o,$(SPLIT_OBJS_CERTIFIED)): CFLAGS += -D__NW_FUNCTION__ -D__XTENSA_CALL0_ABI__ -U__XTENSA_WINDOWED_ABI__
+
+ifneq ($(HAL_FUSA),1)
+$(filter %_nw.o,$(SPLIT_OBJS_NOT_CERTIFIED)): CFLAGS += -D__NW_FUNCTION__ -D__XTENSA_CALL0_ABI__ -U__XTENSA_WINDOWED_ABI__
+endif
+
+$(SPLIT_OBJS_CERTIFIED): %.o:
+	$(CC_FOR_TARGET) -c $(CFLAGS) $(SPLIT_FLAGS_CERTIFIED) $(SRCDIR)/$(SPLIT_SOURCE_CERTIFIED) -D__SPLIT__$(SPLIT_TAG_CERTIFIED) -MMD -MF $*.d -o $@
+$(SPLIT_OBJS): %.o:
+	$(CC_FOR_TARGET) -c $(CFLAGS) $(SPLIT_FLAGS) $(SRCDIR)/$(SPLIT_SOURCE) -D__SPLIT__$(SPLIT_TAG) -MD -MF $*.d -o $@
+	sed -i -e 's/^$(patsubst %.c,%.o,$(SPLIT_SOURCE:.S=.o)):/$*.o:/' $*.d
+
+ifneq ($(HAL_FUSA),1)
+$(SPLIT_OBJS_NOT_CERTIFIED): %.o:
+	mkdir -p not_certified
+	$(CC_FOR_TARGET) -c $(CFLAGS) $(SPLIT_FLAGS_NOT_CERTIFIED) $(SRCDIR)/not_certified/$(SPLIT_SOURCE_NOT_CERTIFIED) -D__SPLIT__$(SPLIT_TAG_NOT_CERTIFIED) -MMD -MF $*.d -o $@
+	sed -i -e 's/^$(patsubst %.c,%.o,$(SPLIT_SOURCE_NOT_CERTIFIED:.S=.o)):/$*.o:/' $*.d
+endif
+
+%.o: %.S
+	mkdir -p not_certified
+	$(CC_FOR_TARGET) -c $(CFLAGS) $(FLAGS_$*) $< -o $@
+
+%.o: %.c
+	mkdir -p not_certified
+	$(CC_FOR_TARGET) -c $(CFLAGS) $(FLAGS_$*) $< -o $@
+
+%.a:
+	-$(RM) $@
+	$(AR_FOR_TARGET) -rs $@ $^
+	$(OC_FOR_TARGET) $(RFLAGS) $@
+
+install: all
+	$(MKPATH) $(INSTLIBDIR)
+	$(CP) $(HALLIB) $(INSTLIBDIR)
+
+clean:
+	-$(RM) $(OBJS) $(HALLIB) *.d
+
+# NOTE: Header file dependencies not specified!
+-include *.d
+

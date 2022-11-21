@@ -1,0 +1,173 @@
+# Copyright (c) 2003-2015 Cadence Design Systems, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+
+# Makefile for libxipc.
+
+default:
+
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+VPATH = $(srcdir)
+prefix = @prefix@
+target_alias = @target_alias@
+target_libdir = $(prefix)/$(target_alias)/lib
+target_incdir = $(prefix)/$(target_alias)/arch/include/xtensa/
+
+top_builddir = @abs_top_builddir@
+top_srcdir = @top_srcdir@
+
+
+include $(top_builddir)/../../Makefile.env
+
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+
+TPP = $(TENSILICA_TOOLS)/bin/tpp
+
+CC_FOR_TARGET = $(XTTOOLS)/bin/$(XTENSA_CC_FOR_TARGET)
+AR_FOR_TARGET = $(XTTOOLS)/bin/xt-ar
+AR_FLAGS = rc
+
+CFLAGS = -O2 -g -mno-serialize-volatile -Wall -Werror -DM -mlongcalls -MD
+DEBUG_CFLAGS = -O0 -g -Wall -Werror -DM -mlongcalls -MD
+
+INCLUDE = 
+
+C_FILES = \
+	xipc_addr.c \
+	xipc_intr.c \
+	xipc_counted_event.c \
+	xipc_pkt_channel.c \
+	xipc_msg_channel.c \
+	xipc_cqueue.c \
+	xipc_rpc.c \
+	xipc_mutex.c \
+	xipc_barrier.c \
+	xipc_cond.c \
+	xipc_sem.c \
+	xipc_init.c \
+	xipc_channel_init.c
+
+C_FILES_XTOS = xipc_xtos.c
+C_FILES_XOS = xipc_xos.c
+
+ASM_FILES =
+
+HEADERS = \
+	$(srcdir)/xipc_primitives.h \
+	$(srcdir)/xipc_common.h \
+	$(srcdir)/xipc_addr.h \
+	$(srcdir)/xipc_intr.h \
+	$(srcdir)/xipc_counted_event.h \
+	$(srcdir)/xipc_msg_channel.h \
+	$(srcdir)/xipc_pkt_channel.h \
+	$(srcdir)/xipc_cqueue.h \
+	$(srcdir)/xipc_rpc.h \
+	$(srcdir)/xipc_mutex.h \
+	$(srcdir)/xipc_barrier.h \
+	$(srcdir)/xipc_pkt.h \
+	$(srcdir)/xipc_cond.h \
+	$(srcdir)/xipc.h
+
+OBJS = $(C_FILES:.c=.o) $(ASM_FILES:.S=.o) 
+OBJS_XTOS = $(C_FILES:.c=.xtos.o) $(C_FILES_XTOS:.c=.o) $(ASM_FILES:.S=.o) 
+OBJS_XOS = $(C_FILES:.c=.xos.o) $(C_FILES_XOS:.c=.o) $(ASM_FILES:.S=.o) 
+DEBUG_OBJS = $(C_FILES:.c=.debug.o) $(ASM_FILES:.S=.debug.o) 
+DEBUG_OBJS_XTOS = $(C_FILES:.c=.debug.xtos.o) $(C_FILES_XTOS:.c=.debug.o) $(ASM_FILES:.S=.debug.o) 
+DEBUG_OBJS_XOS = $(C_FILES:.c=.debug.xos.o) $(C_FILES_XOS:.c=.debug.o) $(ASM_FILES:.S=.debug.o) 
+
+COMPILE_COMMAND = $(CC_FOR_TARGET) $(INCLUDE) -c
+
+%.o : %.c
+	$(COMPILE_COMMAND) $(CFLAGS) -o $@ $<
+
+%.xtos.o : %.c
+	$(COMPILE_COMMAND) $(CFLAGS) -DXIPC_USE_XTOS -o $@ $<
+
+%.xos.o : %.c
+	$(COMPILE_COMMAND) $(CFLAGS) -DXIPC_USE_XOS -o $@ $<
+
+%.debug.o : %.c
+	$(COMPILE_COMMAND) $(DEBUG_CFLAGS) -DXIPC_DEBUG -DXIPC_VERIFY -o $@ $<
+
+%.debug.xtos.o : %.c
+	$(COMPILE_COMMAND) $(DEBUG_CFLAGS) -DXIPC_USE_XTOS -DXIPC_DEBUG -DXIPC_VERIFY -o $@ $<
+
+%.debug.xos.o : %.c
+	$(COMPILE_COMMAND) $(DEBUG_CFLAGS) -DXIPC_USE_XOS -DXIPC_DEBUG -DXIPC_VERIFY -o $@ $<
+
+.PHONY: default all all-target install install-target clean
+
+LIB = libxipc.a
+LIB_XTOS = libxipc-xtos.a
+LIB_XOS = libxipc-xos.a
+DEBUG_LIB = libxipc-debug.a
+DEBUG_LIB_XTOS = libxipc-xtos-debug.a
+DEBUG_LIB_XOS = libxipc-xos-debug.a
+
+$(LIB) : $(OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XTOS) : $(OBJS_XTOS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LIB_XOS) : $(OBJS_XOS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(DEBUG_LIB) : $(DEBUG_OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(DEBUG_LIB_XTOS) : $(DEBUG_OBJS_XTOS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(DEBUG_LIB_XOS) : $(DEBUG_OBJS_XOS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+all: all-target
+
+targets: $(LIB) $(LIB_XTOS) $(LIB_XOS) $(DEBUG_LIB) $(DEBUG_LIB_XTOS) $(DEBUG_LIB_XOS)
+
+all-target: targets
+
+install: install-targets
+
+install-target: install-targets
+
+install-targets: $(LIB) $(LIB_XTOS) $(LIB_XOS) $(DEBUG_LIB) $(DEBUG_LIB_XTOS) $(DEBUG_LIB_XOS)
+	$(INSTALL) $(LIB) $(target_libdir)
+	$(INSTALL) $(LIB_XTOS) $(target_libdir)
+	$(INSTALL) $(LIB_XOS) $(target_libdir)
+	$(INSTALL) $(DEBUG_LIB) $(target_libdir)
+	$(INSTALL) $(DEBUG_LIB_XTOS) $(target_libdir)
+	$(INSTALL) $(DEBUG_LIB_XOS) $(target_libdir)
+
+clean:
+	rm -f *.o *.a *.d $(LIB) $(LIB_XTOS) $(LIB_XOS) $(DEBUG_LIB) $(DEBUG_LIB_XTOS) $(DEBUG_LIB_XOS)
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) && $(SHELL) ./config.status
+
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && $(SHELL) ./config.status --recheck
+

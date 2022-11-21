@@ -1,0 +1,25 @@
+
+These examples demonstrate the use of libdma functions from multiple
+threads using XOS. Both create 3 threads each of which schedules its
+own set of DMA descriptors. All threads share the same channel, and
+the transfers are scheduled in FIFO order.
+
+ xos_fixedbuf.c -- uses fixed-buffer mode
+ xos_taskmode.c -- uses task mode
+
+To build the tests, use the command line examples below or alter them
+to suit your preferences -
+
+    xt-clang -O2 -g xos_fixedbuf.c -lidma-os -lxos -lxtutil -I..
+
+    xt-clang -O2 -g xos_taskmode.c -lidma-os -lxos -lxtutil -I..
+
+The "-I.." is needed to be able to include <idma_tests.h> from the
+parent directory.
+
+IMPORTANT: In task mode, the task buffer must have all descriptors filled
+in before the task is scheduled. i.e. if you allocated a task buffer with
+4 descriptors, you must add 4 descriptors before calling idma_schedule_task().
+
+---
+

@@ -1,0 +1,98 @@
+# Copyright (c) 2003-2013 Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+
+# Makefile for libreftb
+
+SHELL = /bin/sh
+
+srcdir = @srcdir@
+VPATH = $(srcdir)
+prefix = @prefix@
+target_alias = @target_alias@
+target_libdir = $(prefix)/$(target_alias)/arch/lib
+target_incdir = $(prefix)/$(target_alias)/arch/include/xtensa
+target_srcdir = $(prefix)/examples/RefTestbench
+
+top_builddir = @abs_top_builddir@
+top_srcdir = @top_srcdir@
+
+include $(top_builddir)/../../Makefile.env
+
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+
+TPP = $(TENSILICA_TOOLS)/bin/tpp
+
+CC_FOR_TARGET = $(XTTOOLS)/bin/$(XTENSA_CC_FOR_TARGET)
+AR_FOR_TARGET = $(XTTOOLS)/bin/xt-ar
+AR_FLAGS = rc
+
+CFLAGS = -O2 -g -Wall -I.
+
+SOURCES := xt_reftb.c xt_reftb_defs.c
+SOURCE_FILES := $(addprefix $(srcdir)/,$(SOURCES))
+HEADERS := xt_reftb.h
+HEADER_FILES := $(addprefix $(srcdir)/,$(HEADERS))
+LOCAL_INCLUDE_DIR := xtensa
+LOCAL_HEADERS := $(addprefix $(LOCAL_INCLUDE_DIR)/,$(HEADERS))
+TPP_TARGETS = 
+
+OBJS = $(SOURCES:.c=.o)
+
+COMPILE_COMMAND = $(CC_FOR_TARGET) $(CFLAGS) -c
+
+LIB_TARGET = libreftb.a
+
+TARGETS = $(LIB_TARGET)
+
+default: all
+
+all: all-target
+
+install: install-target 
+
+install-target: install-library install-headers install-sources
+
+.PHONY: default all all-target install install-target clean
+
+$(TPP_TARGETS): %: %.tpp $(CONFIG)
+	$(TPP) -s $(CONFIG) -m $(UNIT_HIER_INSTNAME) -o $@ $<
+
+$(OBJS): %.o : %.c $(LOCAL_HEADERS)
+	$(COMPILE_COMMAND) -o $@ $<
+
+$(LIB_TARGET) : $(OBJS)
+	$(AR_FOR_TARGET) rc $@ $^
+
+$(LOCAL_HEADERS) : $(HEADER_FILES)
+	$(INSTALL) -d $(LOCAL_INCLUDE_DIR)
+	$(INSTALL) $(HEADER_FILES) $(LOCAL_INCLUDE_DIR)
+
+all-target: $(TARGETS)
+
+install-library: $(TARGETS) 
+	$(INSTALL) -d $(target_libdir) 
+	$(INSTALL) $(TARGETS) $(target_libdir)
+
+install-headers: $(HEADER_FILES) 
+	$(INSTALL) -d $(target_incdir) 
+	$(INSTALL) $(HEADER_FILES) $(target_incdir)
+
+install-sources: $(SOURCE_FILES)
+	$(INSTALL) -d $(target_srcdir) 
+	$(INSTALL_DATA) $(SOURCE_FILES) $(target_srcdir)
+
+clean:
+	rm -f *.o *.a *.d $(TARGETS)
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+	cd $(top_builddir) && $(SHELL) ./config.status
+
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && $(SHELL) ./config.status --recheck
+

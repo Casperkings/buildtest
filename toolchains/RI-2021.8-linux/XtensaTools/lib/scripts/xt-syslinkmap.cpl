@@ -1,0 +1,295 @@
+# xt-syslinkmap.pl
+#
+# $Id: //depot/rel/Homewood/ib.8/Xtensa/Software/misc/xt-syslinkmap.pl#1 $
+
+use strict;
+use Carp;
+use Carp::Heavy;
+#use File::Path;
+use Getopt::Long;
+
+my $xtensa_tools_root;
+BEGIN {
+    #  XTENSA_TOOLS_ROOT is set by the perl wrapper.
+    $xtensa_tools_root = $ENV{'XTENSA_TOOLS_ROOT'};
+}
+
+use lib "${xtensa_tools_root}/lib/perl";
+use Object;
+use Component qw(:DEFAULT readfile writefile);
+use Xtensa::YAML;
+use Xtensa::AddressLayout;
+
+#  For debugging:
+#  Re-implement Carp's eval display to include line numbers, so error lines can be reasonably located:
+#
+{
+    package Carp;
+    our $MaxEvalLen;
+    BEGIN { undef &get_subname; }		# avoid warning about redefined get_subname()
+    sub get_subname {
+	my $info = shift;
+	if (defined($info->{evaltext})) {
+	    my $eval = $info->{evaltext};
+	    if ($info->{is_require}) {
+		return "require $eval";
+	    } else {
+		$eval =~ s/([\\\'])/\\$1/g;
+		my @lines = split("\n", $eval);
+		$eval = join("\n", map(($_+1).": ".$lines[$_], 0 .. $#lines));
+		return "eval '" . str_len_trim($eval, $MaxEvalLen) . "'";
+	    }
+	}
+	return ($info->{sub} eq '(eval)') ? 'eval {...}' : $info->{sub};	#'
+    }
+}
+
+my $year = 1900 + (localtime)[5];
+my $headcomment = <<END;
+# system.yml  -  system and linker-map description file
+# 
+# Copyright (c) 2007-$year Tensilica Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Tensilica Inc.
+# They may not be modified, copied, reproduced, distributed, or disclosed to
+# third parties in any manner, medium, or form, in whole or in part, without
+# the prior written consent of Tensilica Inc.
+# 
+# WARNING: This file was automatically generated.  Do not edit!
+
+END
+
+
+my $argv0 = $ENV{'ARGV0'};	# set by the perl wrapper
+$argv0 = $0 unless defined($argv0);
+my $myname = $argv0;
+$myname =~ s|.*[/\\]||;
+
+#my $tools = $ENV{'XTENSA_STANDARD_TOOLS'};
+#my $windows = ($^O =~ /win/i) && ($^O !~ /darwin/i);
+#my $s = (($windows && $^O !~ /cygwin/i) ? "\\" : '/');	# directory separator
+
+
+#---------------------------------------------------------------------------
+#			 --- Parse Options ---
+#---------------------------------------------------------------------------
+
+my $help;
+my $xconfig;
+my $outputfile;
+my $mbuild_debug = 0;
+my $logfile;
+my $hw_outputfile;
+my $xmap_outputfile;
+my $xtensa_system;
+my @defs;
+my @tasks;
+my $no_autotasks = 0;
+my $with_config = 0;
+
+GetOptions(
+	"help"       => \$help,
+	"debug!"     => \$mbuild_debug,
+	"x=s"        => \$xconfig,
+	"o=s"        => \$outputfile,
+	"syshw=s"    => \$hw_outputfile,
+	"xmap=s"     => \$xmap_outputfile,
+	"registry=s" => \$xtensa_system,
+	"xtensa-system=s" => \$xtensa_system,
+	"task=s@"    => \@tasks,
+	"noauto!"    => \$no_autotasks,
+	"withconfig!"=> \$with_config,
+	"logfile=s"  => \$logfile,
+	"def=s@"     => \@defs,
+	);
+
+#---------------------------------------------------------------------------
+#		       --- Print Help Message ---
+#---------------------------------------------------------------------------
+if (defined $help or !defined($xconfig) or !defined($xtensa_system)
+    or !( defined($outputfile) or defined($hw_outputfile) or defined($xmap_outputfile) )) {
+    print <<END_OF_MESSAGE;
+
+    Usage: $myname [options]
+
+    Generates constructed system and linker maps in YAML files from the given YAML system ("SOC") description.
+
+    Option summary:
+
+        -help           - Print this message
+        -debug          - Display extra output for internal debugging
+        -x file         - (REQUIRED) Name of XLD system mapping script file to use.
+                          Same as given to RH and later xt-mbuild.  Extension is .xld
+        -registry dir   - (REQUIRED) Xtensa core registry directory where the parameter
+                          files for all cores specified in the system (if any)
+                          can be found.  (The relevant core packages must have
+                          already been built and installed.)
+        -withconfig     - Include core config(s) database in the generated output YAML
+    Specifying at least one of the following three output files is required:
+        -o file         - Resulting YAML system description file to output
+                          (example:  system.yml)
+        -syshw file     - Output YAML system description without any software contructs
+        -xmap file      - Output an xmap format version of resulting system
+        -logfile file   - Log debug output to <file>.
+END_OF_MESSAGE
+#        -task NAME      - execute the specified task (see <xtensa_tools_root>/lib/transforms)
+#        -def NAME=VALUE - define... (TBD)
+    exit;
+}
+
+if (@ARGV) {
+    print "Error: unknown argument @ARGV\n";
+    print "Use -help option for usage information.\n";
+    exit 1;
+}
+
+#
+#  First create a log file for debugging:
+#
+my $extralog;
+if (defined($logfile)) {
+    open($extralog, ">$logfile") or die "ERROR opening $logfile for write: $@";
+}
+
+
+
+#######   Load system description ...   #######
+
+my $system = read_xld_raw($xconfig, $myname);
+
+#  Minimally populate anything missing:
+$system->{name} //= "unnamed_system";
+my $components = ($system->{components} //= {});
+$system->{connections} //= [];
+$system->{system} = $system;
+$system->{parent} = undef;
+$system->{xtensa_system} //= $xtensa_system;
+$system->{xtensa_tools_root} = $xtensa_tools_root;
+
+$system->process_imports;	# from <xtensa_tools_root>/lib/components, and $system->imports array
+$system->sanity_check_system;
+
+#  This determines what we pull from .components.XXX{_list,_byname} into .components.all :
+my @known_component_types = qw/core memory/;
+
+my $all        = ($components->{all}        //= []);
+my $all_byname = ($components->{all_byname} //= {});
+#foreach my $name (sort keys %$all_byname) {	# we'll remap anyway, so skip...
+#    my $comp = $all_byname->{$name};
+#    $comp->name eq $name or die "ERROR: inconsistent system->components->all_byname->{'$name'}->name is not '$name'";
+#}
+my @comps_all = @$all;   @$all = ();
+my @comps_byname = keys %$all_byname;   %$all_byname = ();
+sub add_comp {
+    my ($comp) = @_;
+    return unless defined($comp);
+    UNIVERSAL::isa($comp, "HASH") or die "ERROR: non-HASH component found";
+    bless($comp, "Component") unless UNIVERSAL::isa($comp, "Component");
+    my $name = $comp->name;
+    my $have = $all_byname->{$name};
+    if (!defined($have)) {
+	push @$all, $comp;
+	$all_byname->{$name} = $comp;
+    } elsif ($have ne $comp) {
+	die "ERROR: multiple components with duplicate name '$name'";
+    }
+}
+#  First re-add from ordered lists:
+foreach (@comps_all) { add_comp($_); }		# originals first
+foreach my $comptype (@known_component_types) {
+    my $comps = ($components->{$comptype."_list"} //= []);
+    foreach (@$comps) { add_comp($_); }
+}
+#  Then see if anything else is in unordered by-name maps:
+foreach (@comps_byname) { add_comp($_); }
+foreach my $comptype (@known_component_types) {
+    my $comps_byname = ($components->{$comptype."_byname"} //= {});
+    foreach (sort keys %$comps_byname) { add_comp($_); }
+}
+#  Recompute subsets (FIXME: needs to be redone after processing constructs):
+foreach my $comptype (@known_component_types) {
+    my $comps = $components->{$comptype."_list"};
+    my $comps_byname = $components->{$comptype."_byname"};
+    @$comps = grep($_->type eq $comptype, @$all);		# FIXME: use UNIVERSAL::isa ?
+    %$comps_byname = map { $_->name => $_ } @$comps;
+}
+
+$system->expand_system;
+
+
+
+#######   Execute TASKS   #######
+
+my $components_dir = $xtensa_tools_root."/lib/components";
+#  Look for task modules:
+opendir DIR, $components_dir or die "ERROR: could not open directory: $components_dir: $!";
+my @dir = sort readdir DIR or die "ERROR: could not read directory: $components_dir: $!";
+closedir DIR;
+my %mods;
+my @automods;
+foreach (@dir) {
+    /^task(auto)?-(.*).pm$/ or next;
+    push @automods, $2 if $1;
+    $mods{$2} = $_;
+}
+my @do_mods;
+push @do_mods, @automods unless $no_autotasks;
+foreach my $task (@tasks) {
+    if ($mods{$task}) {
+	push @do_mods, $task;
+    } else {
+	die "ERROR: unrecognized task '$task', valid tasks are ".join(", ", sort keys %mods)." (see $components_dir)";
+    }
+}
+foreach my $task (@do_mods) {
+    print STDERR "Running task '$task' ...\n";	# if $mbuild_debug
+    require $components_dir."/".$mods{$task};
+    no strict 'refs';
+    &{"Xtensa::Task::${task}::run"}();
+}
+
+
+#######   Check / get system info   #######
+
+my $layout = ($system->{layout} //= new Xtensa::AddressLayout);
+$layout->{xtensa_system} //= $xtensa_system;
+$layout->{xtensa_tools_root} = $xtensa_tools_root;
+
+my $constructs = $system->{constructs};	# $layout->read_xld($xconfig);
+
+#  Elaborate the system hardware:
+$layout->instantiateSystemLayout(extralog => $extralog, constructs => $constructs);
+
+if (defined($hw_outputfile)) {
+    my $obj = $layout->cleanup($with_config);
+    writefile($hw_outputfile, $headcomment . YAML_Dump_objects($system));
+    $layout->reload($obj);
+}
+
+if (defined($xmap_outputfile) or defined($outputfile)) {
+    #  Create the software linkmaps:
+    $layout->instantiateLinkmaps(extralog => $extralog, constructs => $constructs);
+
+    if ($mbuild_debug) {
+	print STDERR "Layout after call to instantiateLinkmaps():\n";
+	print STDERR join("\n", $layout->format_addressables());
+    }
+
+    if (defined($xmap_outputfile)) {
+	writefile($xmap_outputfile, scalar($layout->format_addressables));
+    }
+
+    if (defined($outputfile)) {
+	my $obj = $layout->cleanup($with_config);
+	writefile($outputfile, $headcomment . YAML_Dump_objects($system));
+	$layout->reload($obj);
+    }
+}
+
+#  And close the debug log file:
+if (defined($extralog)) {
+    close($extralog) or die "ERROR closing $logfile: $@";
+}
+
+exit 0;
+

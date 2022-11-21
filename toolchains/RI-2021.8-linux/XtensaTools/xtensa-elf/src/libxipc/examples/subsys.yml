@@ -1,0 +1,120 @@
+---
+Metadata:
+  Version: 2
+
+SubSystemName: TestSubSys
+
+Processors:
+  - Name              : DSP_0
+    Config            : visionp6_ao
+    ProcId            : 0
+    Master            : true
+    StaticVectorSel   : 0
+    InstRamFetchWidth : 16b
+    DataRamFetchWidth : 64b
+    PifWidth          : 16b
+    IDMA              : {Shared: false}
+    InstRam0:
+      {LocalAddr: 0xd0000000, GlobalAddr: 0x20080000, Size: 32Kb}
+    DataRam0:
+      {LocalAddr: 0xcffc0000, GlobalAddr: 0x20040000, Size: 256Kb, NumBanks: 2,
+       NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0xcff80000, GlobalAddr: 0x20000000, Size: 256Kb, NumBanks: 2,
+       NumSubBanks: 8}
+
+  - Name              : DSP_1
+    Config            : visionp6_ao
+    ProcId            : 1
+    StaticVectorSel   : 0
+    InstRamFetchWidth : 16b
+    DataRamFetchWidth : 64b
+    PifWidth          : 16b
+    IDMA              : {Shared: false}
+    InstRam0:
+      {LocalAddr: 0xd0000000, GlobalAddr: 0x20140000, Size: 32Kb}
+    DataRam0:
+      {LocalAddr: 0xcffc0000, GlobalAddr: 0x20100000, Size: 256Kb, NumBanks: 2,
+       NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0xcff80000, GlobalAddr: 0x200c0000, Size: 256Kb, NumBanks: 2,
+       NumSubBanks: 8}
+
+  - Name              : DSP_2
+    Config            : visionp6_ao
+    ProcId            : 2
+    StaticVectorSel   : 0
+    InstRamFetchWidth : 16b
+    DataRamFetchWidth : 64b
+    PifWidth          : 16b
+    IDMA              : {Shared: false}
+    InstRam0:
+      {LocalAddr: 0xd0000000, GlobalAddr: 0x20200000, Size: 32Kb}
+    DataRam0:
+      {LocalAddr: 0xcffc0000, GlobalAddr: 0x201c0000, Size: 256Kb, NumBanks: 2,
+       NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0xcff80000, GlobalAddr: 0x20180000, Size: 256Kb, NumBanks: 2,
+       NumSubBanks: 8}
+
+SystemRAM:
+  Size             : 512Mb
+  GlobalAddr       : 0xe0000000
+  ReadDelay        : 1
+  ReadRepeat       : 1
+  WriteDelay       : 1
+  WriteRepeat      : 1
+  RequestFIFODepth : 255
+
+SystemROM:
+  {Size: 16Mb, GlobalAddr: 0xd0080000}
+
+SubSystemMMIO:
+  - Name: MMIO
+    InterruptRegisters:
+      - {GlobalAddr : 0x30001000,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 4, ProcInterrupt: 4,
+            Type: Level, Proc: DSP_0},
+           {BitOffset: 1, BInterrupt: 5, ProcInterrupt: 5,
+            Type: Level, Proc: DSP_0},
+           {BitOffset: 2, BInterrupt: 12, ProcInterrupt: 16,
+            Type: Edge, xipcNotify: true, Proc: DSP_0}
+         ]}
+      - {GlobalAddr : 0x30002000,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 4, ProcInterrupt: 4,
+            Type: Level, Proc: DSP_1},
+           {BitOffset: 1, BInterrupt: 5, ProcInterrupt: 5,
+            Type: Level, Proc: DSP_1},
+           {BitOffset: 2, BInterrupt: 12, ProcInterrupt: 16, 
+            Type: Edge, xipcNotify: true, Proc: DSP_1}
+         ]}
+      - {GlobalAddr : 0x30003000,
+         InterruptMap: [
+           {BitOffset: 0, BInterrupt: 4, ProcInterrupt: 4, 
+            Type: Level, Proc: DSP_2},
+           {BitOffset: 1, BInterrupt: 5,  ProcInterrupt: 5, 
+            Type: Level, Proc: DSP_2},
+           {BitOffset: 2, BInterrupt: 12, ProcInterrupt: 16, 
+            Type: Edge, xipcNotify: true, Proc: DSP_2}
+         ]}
+    Controls:
+      - {GlobalAddr: 0x30001004, Width: 1,
+         ControlMap: [{Name: BReset, Proc: DSP_0}]}
+      - {GlobalAddr: 0x30001008, Width: 1,
+         ControlMap: [{Name: RunStall, Proc: DSP_0}]}
+      - {GlobalAddr: 0x30002004, Width: 1,
+         ControlMap: [{Name: BReset, Proc: DSP_1}]}
+      - {GlobalAddr: 0x30002008, Width: 1,
+         ControlMap: [{Name: RunStall, Proc: DSP_1}]}
+      - {GlobalAddr: 0x30003004, Width: 1,
+         ControlMap: [{Name: BReset, Proc: DSP_2}]}
+      - {GlobalAddr: 0x30003008, Width: 1,
+         ControlMap: [{Name: RunStall, Proc: DSP_2}]}
+  
+SubSystemInterconnect:
+  - {Src: CommonBus,   Dests: [DSP_0, DSP_1, DSP_2]}
+
+SubSystemSoftware:
+  XIPCSharedDataBuffer: xmp_xipc_shared_data_buffer

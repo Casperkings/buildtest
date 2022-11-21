@@ -1,0 +1,43 @@
+#  XtensaCore component type
+
+# Copyright (c) 2018 by Cadence Design Systems, Inc.  ALL RIGHTS RESERVED.
+# These coded instructions, statements, and computer programs are the
+# copyrighted works and confidential proprietary information of Cadence Design
+# Systems, Inc.  They may not be modified, copied, reproduced, distributed, or
+# disclosed to third parties in any manner, medium, or form, in whole or in
+# part, without the prior written consent of Cadence Design Systems, Inc.
+
+---
+types:
+  XtensaCore:
+    type: Component
+
+    #  Interfaces (config-specific):
+    #external:  (optional) AddressMapped(master)	# PIF or AXI{3,4} or ACE or ACELite etc.
+    #idma:      (optional) AddressMapped(master)	# ditto...
+    #inbound:   (optional) AddressMapped(slave)		# ditto...
+    #apb:       (optional) AddressMapped(master)
+    #debug_apb: (optional) AddressMapped(slave)
+    #datarams: array of AddressMapped(master)
+    #dataroms: array of AddressMapped(master)
+    #instrams: array of AddressMapped(master)
+    #instroms: array of AddressMapped(master)
+
+    #  Parameters (this matches Xtensa::CoreInstance in AddressLayout.pm):
+
+    #  Name of processor configuration
+    #config_name: string
+
+    #  Processor configuration object (not a component)
+    #config: XtensaCoreConfig
+
+    #  Unique core index (processor ID) in system:
+    #index: integer
+
+    #swoptions:
+      #vecselect: 0..1
+      #vecbase: uint64
+      #vecreset_pins: uint64
+      #static_vecbase0: uint64
+      #static_vecbase1: uint64
+

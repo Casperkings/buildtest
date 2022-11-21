@@ -1,0 +1,5 @@
+XTSYS = subsys.xld
+YML = subsys.yml
+CORE = visionp6_ao
+NUM_CORES=3
+LIB_IDMA = -lidma-xtos

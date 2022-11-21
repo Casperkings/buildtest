@@ -1,0 +1,86 @@
+---
+SubSystemName: SubSystem
+
+Metadata:
+  Version: 2
+
+Processors:
+  - Name              : DSP_0
+    Config            : XRC_Vision_Q7_AO
+    Pipeline          : NX
+    ProcId            : 0
+    Master            : true
+    StaticVectorSel   : 0
+    DataRamFetchWidth : 64b
+    MasterDataWidth   : 16b
+    MasterInstWidth   : 16b
+    SlaveDataWidth    : 16b
+    IDMA              : {Shared: false}
+    Dcache:
+      LineSize        : 64
+    DataRam0:
+      {LocalAddr: 0x3ffc0000, GlobalAddr: 0x80100000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0x3ffe0000, GlobalAddr: 0x80200000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+
+  - Name              : DSP_1
+    Config            : XRC_Vision_Q7_AO
+    Pipeline          : NX
+    ProcId            : 1
+    StaticVectorSel   : 0
+    DataRamFetchWidth : 64b
+    MasterDataWidth   : 16b
+    MasterInstWidth   : 16b
+    SlaveDataWidth    : 16b
+    IDMA              : {Shared: false}
+    Dcache:
+      LineSize        : 64
+    DataRam0:
+      {LocalAddr: 0x3ffc0000, GlobalAddr: 0x80300000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+    DataRam1:
+      {LocalAddr: 0x3ffe0000, GlobalAddr: 0x80400000, Size: 128Kb, NumBanks: 2, NumSubBanks: 8}
+
+SystemRAM:
+  Size             : 512Mb
+  GlobalAddr       : 0x60000000
+  ReadDelay        : 1
+  ReadRepeat       : 1
+  WriteDelay       : 1
+  WriteRepeat      : 1
+  RequestFIFODepth : 255
+
+SystemROM:
+  Size: 16Mb
+  GlobalAddr: 0x50000000
+  ReadDelay: 1
+  ReadRepeat: 1
+  WriteDelay: 1
+  WriteRepeat: 1
+  RequestFIFODepth : 255
+  
+DeviceMemories:
+  - {Name: Shared_RAM_L, 
+     Size: 224Mb, 
+     GlobalAddr: 0xf0000000,
+     ReadDelay: 1,
+     ReadRepeat: 1,
+     WriteDelay: 1,
+     WriteRepeat: 1,
+     RequestFIFODepth : 255,
+     HostShared: true,
+     HostName: SharedRAM_L
+    }
+  - {Name: System_RAM_L, 
+     Size: 32Mb, 
+     GlobalAddr: 0xfe000000,
+     ReadDelay: 1,
+     ReadRepeat: 1,
+     WriteDelay: 1,
+     WriteRepeat: 1,
+     RequestFIFODepth : 255,
+     HostShared: true,
+     HostName: SystemRAM_L
+    }
+
+SubSystemInterconnect:
+  - {Src: CommonBus,   Dests: [DSP_0, DSP_1]}

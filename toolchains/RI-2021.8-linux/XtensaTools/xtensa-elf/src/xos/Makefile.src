@@ -1,0 +1,209 @@
+# Makefile for X/OS in <xtensa_tools_root>/xtensa-elf/src/xos
+
+# Copyright (c) 2003-2017 Cadence Design Systems, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+#  This makefile assumes GNU make features
+#
+#  Invoke this Makefile like this:
+#	cd <some build directory>
+#	make -f <this file> \
+#		MAKEFILE_SRC=<this file> \
+#		XTENSA_TOOLS_ROOT=<path to Xtensa Tools> \
+#		XTENSA_ROOT=<path to Xtensa core package> \
+#		INSTLIBDIR=<path to installation directory>
+#
+
+ifndef XTENSA_TOOLS_ROOT
+$(error Please set XTENSA_TOOLS_ROOT to the path to Xtensa Tools)
+endif
+#  NOTE:  For now, we assume $(XTENSA_TOOLS_ROOT)/bin is on the PATH.
+ifndef XTENSA_ROOT
+$(error Please set XTENSA_ROOT to the path to your specific Xtensa core package)
+endif
+ifndef INSTLIBDIR
+$(error Please set INSTLIBDIR to the path where libraries and objects are installed)
+#INSTLIBDIR = $(call fixpath,$(XTENSA_ROOT)/xtensa-elf/arch/lib)
+endif
+
+#  Select the specified Xtensa configuration:
+export XTENSA_SYSTEM = $(XTENSA_ROOT)/config
+export XTENSA_CORE = default
+
+include $(XTENSA_TOOLS_ROOT)/misc/defs.mk
+include $(XTENSA_ROOT)/misc/build.mk
+
+ifndef SRCDIR
+$(error Please set MAKEFILE_SRC to the path to the X/OS Makefile.src)
+endif
+
+#  Native commands like $(MKPATH) and $(CP) need native directory separators:
+#fixpath = $(subst /,$S,$(1))
+
+# Detect C library
+XSTR2   = $(shell cd $(XTENSA_ROOT) && grep SW_CLibrary config/default-params)
+CLIB    = $(word 3, $(XSTR2))
+
+ifeq ($(CLIB), xclib)
+CSTD    = -std=c11
+else
+CSTD    = -std=c99
+endif
+
+ifndef CC_FOR_TARGET
+CC_FOR_TARGET = xt-clang
+endif
+XTAR  = xt-ar
+
+.PHONY: all install clean
+
+# Compilation flags
+WARNOPT       = -Werror -Wall -Wextra -Wunused-variable -Wundef -Wstrict-prototypes -Wpointer-arith \
+		-Wcast-qual -Wformat-security -Wmissing-prototypes -Wshadow -Wsign-compare -pedantic
+CMNFLAGS      = -mlongcalls -ffunction-sections -mno-l32r-flix -DXOS_OPT_STATS=1
+CMNCFLAGS     = $(WARNOPT) $(CMNFLAGS) -mno-coproc -fno-builtin
+
+ifeq ($(CC_FOR_TARGET),xt-clang)
+WARNOPT      += -Wshadow-all -Wunreachable-code-aggressive -Wduplicate-enum \
+		-Wcompare-distinct-pointer-types -Warray-bounds-pointer-arithmetic -Wvla
+endif
+
+ifeq ($(CC_FOR_TARGET),xt-xcc)
+CMNCFLAGS += -clang $(CSTD)
+else
+CMNCFLAGS += $(CSTD)
+endif
+
+ASFLAGS       = -Os -g $(CMNFLAGS) -Wa,--schedule
+ASFLAGS_DEBUG = -Os -g $(CMNFLAGS) -Wa,--schedule -DXOS_DEBUG_ALL=1
+ASFLAGS_OPT   = -O3    $(CMNFLAGS) -Wa,--schedule
+
+CFLAGS        = -Os -g $(CMNCFLAGS)
+CFLAGS_DEBUG  = -Os -g $(CMNCFLAGS) -DXOS_DEBUG_ALL=1
+CFLAGS_OPT    = -O3 -g $(CMNCFLAGS)
+
+# File-specific flags
+FLAGS_xos_vectors_xea3 = -mtext-section-literals
+
+XOS_OBJS = \
+        xos.o           \
+	xos_barrier.o   \
+	xos_blockmem.o  \
+        xos_clib.o      \
+        xos_cond.o      \
+	xos_coproc_handler.o \
+        xos_display.o   \
+        xos_event.o     \
+        xos_exc_handler.o \
+	xos_hwprofile.o \
+	xos_hwprofile_asm.o \
+	xos_idma.o      \
+        xos_int_table.o \
+        xos_msgq.o      \
+        xos_mutex.o     \
+	xos_once.o      \
+        xos_semaphore.o \
+	xos_sm.o \
+	xos_start_main.o \
+	xos_stats.o     \
+	xos_system_check.o \
+	xos_system_timer.o \
+        xos_thread.o    \
+        xos_timeofday.o \
+        xos_timer.o     \
+	xos_tls.o       \
+	xos_usermode.o
+
+ifeq ($(XPAL_XEA), 2)
+XOS_OBJS += \
+	xos_handlers.o    \
+	xos_int_stack.o   \
+	xos_vectors.o     \
+	xos_window_vectors.o
+endif
+
+ifeq ($(XPAL_XEA), 3)
+XOS_OBJS += \
+	xos_handlers_xea3.o \
+	xos_vectors_xea3.o
+endif
+
+XOS_DEBUG_OBJS = $(subst .o,-debug.o,$(XOS_OBJS))
+XOS_OPT_OBJS   = $(subst .o,-opt.o,$(XOS_OBJS))
+
+TARGETS = libxos.a libxos-debug.a libxos-opt.a
+
+
+#  Include dependency rules (generated using -MD)
+-include $(wildcard *.d)
+
+%.a :
+	-$(RM) $@
+	$(XTAR) rs $@ $^
+
+%.o : src/%.S
+	$(CC_FOR_TARGET) -c $(ASFLAGS) $(FLAGS_$*) $(XTFLAGS) -MD -MF $(subst .o,.d,$@) -o $@ $<
+
+%.o : src/%.c
+	$(CC_FOR_TARGET) -c $(CFLAGS)  $(FLAGS_$*) $(XTFLAGS) -MD -MF $(subst .o,.d,$@) -o $@ $<
+
+%-debug.o : src/%.S
+	$(CC_FOR_TARGET) -c $(ASFLAGS_DEBUG) $(FLAGS_$*) $(XTFLAGS) -MD -MF $(subst .o,.d,$@) -o $@ $<
+
+%-debug.o : src/%.c
+	$(CC_FOR_TARGET) -c $(CFLAGS_DEBUG)  $(FLAGS_$*) $(XTFLAGS) -MD -MF $(subst .o,.d,$@) -o $@ $<
+
+%-opt.o : src/%.S
+	$(CC_FOR_TARGET) -c $(ASFLAGS_OPT) $(FLAGS_$*) $(XTFLAGS) -MD -MF $(subst .o,.d,$@) -o $@ $<
+
+%-opt.o : src/%.c
+	$(CC_FOR_TARGET) -c $(CFLAGS_OPT)  $(FLAGS_$*) $(XTFLAGS) -MD -MF $(subst .o,.d,$@) -o $@ $<
+
+
+#  Don't build XOS for these XEA versions:
+ifneq ($(filter 0 1 5,$(XPAL_XEA)),)
+
+all :
+	@echo "Core has XEA$(XPAL_XEA), skip XOS build"
+install :
+	@echo "Core has XEA$(XPAL_XEA), skip install"
+
+else
+
+all : $(TARGETS)
+
+libxos.a : $(XOS_OBJS)
+
+libxos-debug.a : $(XOS_DEBUG_OBJS)
+
+libxos-opt.a : $(XOS_OPT_OBJS)
+
+install :
+	-$(MKPATH) $(INSTLIBDIR)
+	$(CP) $(TARGETS) $(INSTLIBDIR)
+
+endif
+
+clean :
+	-$(RM) *.o *.a *.d
+
+.PHONY : all install clean
+

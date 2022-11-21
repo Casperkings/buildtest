@@ -1,0 +1,5 @@
+CC  = ${XTENSA_LINUX_BUILDROOT}/output/host/usr/bin/xtensa-linux-gcc
+CXX = ${XTENSA_LINUX_BUILDROOT}/output/host/usr/bin/xtensa-linux-g++
+
+include ../Makefile.common
+include ${TOP_DIR}/Makefile.xtensa-host.common
