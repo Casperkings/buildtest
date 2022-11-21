@@ -78,10 +78,10 @@ else
 
 fi	
 
-if [ ! -e "${SDK_PACKAGE}" ]; then
-       echo "Error: please get SDK package "${SDK_PACKAGE}", and put in folder ${INSTALL_WORK_DIR}"
-       exit 1
-fi
+#if [ ! -e "${SDK_PACKAGE}" ]; then
+#       echo "Error: please get SDK package "${SDK_PACKAGE}", and put in folder ${INSTALL_WORK_DIR}"
+#       exit 1
+#fi
 
 if [ ! -e "${DSP_TOOL_PACKAGE_2021}" ]; then
 	echo "Error: please get iot sdk tool package ${DSP_TOOL_PACKAGE_2021}, and put in folder ${INSTALL_WORK_DIR}" 
@@ -183,14 +183,14 @@ echo ""
 echo Installing candence license server
 "${INSTALL_WORK_DIR}"/start_lic_server.sh
 
-echo "'"
-echo Decompress SDK pakcage
-cd "${INSTALL_WORK_DIR}"
-${SEVEN_ZA} x -y "${SDK_PACKAGE}" -o"${SDK_ROOT}"
-if [ "$?" -ne "0" ]; then
-        echo  "Error: decompress ${SDK_PACKAGE} fail."
-        exit 1
-fi
+#echo "'"
+#echo Decompress SDK pakcage
+#cd "${INSTALL_WORK_DIR}"
+#${SEVEN_ZA} x -y "${SDK_PACKAGE}" -o"${SDK_ROOT}"
+#if [ "$?" -ne "0" ]; then
+#        echo  "Error: decompress ${SDK_PACKAGE} fail."
+#        exit 1
+#fi
 
 #  ~/.airoha_sdk_env
 echo "#### Auto generate by install script, do not modify" > ${XTENSA_ROOT}/airoha_sdk_env_158x
