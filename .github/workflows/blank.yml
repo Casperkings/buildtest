@@ -32,7 +32,8 @@ jobs:
       # Runs a set of commands using the runners shell
       - name: Install Environments
         run: |
-          sudo bash ./toolchains/install.sh
+          cd ./toolchains
+          sudo bash ./install.sh
           echo "Installed Environments"
           
           
